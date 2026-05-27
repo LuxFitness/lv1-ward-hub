@@ -77,8 +77,34 @@
 
 ## Traceability
 
-*(Filled by roadmapper — maps REQ-IDs to phases)*
-
-| REQ-ID | Phase | Notes |
-|--------|-------|-------|
-| (pending roadmap) | | |
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| CALL-01 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-02 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-03 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-04 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-05 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-06 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-07 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CALL-08 | Phase 1 — Calling Pipeline & Auth | Pending |
+| MBR-01 | Phase 1 — Calling Pipeline & Auth | Pending |
+| MBR-02 | Phase 1 — Calling Pipeline & Auth | Pending |
+| MBR-03 | Phase 1 — Calling Pipeline & Auth | Pending |
+| AUTH-01 | Phase 1 — Calling Pipeline & Auth | Pending |
+| AUTH-02 | Phase 1 — Calling Pipeline & Auth | Pending |
+| AUTH-03 | Phase 1 — Calling Pipeline & Auth | Pending |
+| UI-01 | Phase 1 — Calling Pipeline & Auth | Pending |
+| UI-02 | Phase 1 — Calling Pipeline & Auth | Pending |
+| UI-03 | Phase 1 — Calling Pipeline & Auth | Pending |
+| CAL-01 | Phase 2 — Google Calendar Integration | Pending |
+| CAL-02 | Phase 2 — Google Calendar Integration | Pending |
+| CAL-03 | Phase 2 — Google Calendar Integration | Pending |
+| CAL-04 | Phase 2 — Google Calendar Integration | Pending |
+| CAL-05 | Phase 2 — Google Calendar Integration | Pending |
+| CAL-06 | Phase 2 — Google Calendar Integration | Pending |
+| SHT-01 | Phase 3 — Google Sheets Import | Pending |
+| SHT-02 | Phase 3 — Google Sheets Import | Pending |
+| SAC-01 | Phase 4 — Sacrament Meeting Planning | Pending |
+| SAC-02 | Phase 4 — Sacrament Meeting Planning | Pending |
+| SAC-03 | Phase 4 — Sacrament Meeting Planning | Pending |
+| SAC-04 | Phase 4 — Sacrament Meeting Planning | Pending |
