@@ -41,7 +41,20 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can see a vacant positions view showing all unfilled positions with any consideration notes
   4. User can create a pipeline entry for a vacant position, advance it through every stage (Recommended → Extended → Accepted/Declined → Sustained → Set Apart → Active), and see the date each stage was entered
   5. User can see a pending actions inbox listing all callings that are stuck mid-pipeline and need a follow-up; the system blocks creating a second active pipeline entry for a position that already has one in progress
-**Plans**: TBD
+**Plans**: 10 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Backend scaffold: Express server, Supabase client, auth/rate-limit middleware
+- [ ] 01-02-PLAN.md — Database migration SQL: all Phase 1 tables, enum, partial unique index, org_units seed
+- [ ] 01-03-PLAN.md — [BLOCKING] Schema push to Supabase + verification checkpoint
+- [ ] 01-04-PLAN.md — State machine TDD: CallingStatus types + VALID_TRANSITIONS + test suite
+- [ ] 01-05-PLAN.md — Auth routes: login, check, logout with rate limiting and session fixation prevention
+- [ ] 01-06-PLAN.md — Calling API routes: roster, create, transition, pending inbox
+- [ ] 01-07-PLAN.md — Member CRUD API: list, create, update, delete, current-calling lookup
+- [ ] 01-08-PLAN.md — Frontend scaffold: Vite + shadcn/ui + Tailwind v4 + LoginPage + apiFetch + uiStore
+- [ ] 01-09-PLAN.md — Roster UI: RosterView (org-grouped) + CallingPanel (Sheet with valid-only actions)
+- [ ] 01-10-PLAN.md — Pending Inbox + MemberSearch typeahead + Members management tab
+
 **UI hint**: yes
 
 ### Phase 2: Google Calendar Integration
@@ -84,7 +97,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Google Cloud Setup | 0/TBD | Not started | - |
-| 1. Calling Pipeline & Auth | 0/TBD | Not started | - |
+| 1. Calling Pipeline & Auth | 0/10 | Planned | - |
 | 2. Google Calendar Integration | 0/TBD | Not started | - |
 | 3. Google Sheets Import | 0/TBD | Not started | - |
 | 4. Sacrament Meeting Planning | 0/TBD | Not started | - |
