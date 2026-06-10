@@ -46,7 +46,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Backend scaffold: Express server, Supabase client, auth/rate-limit middleware
 - [x] 01-02-PLAN.md — Database migration SQL: all Phase 1 tables, enum, partial unique index, org_units seed
-- [ ] 01-03-PLAN.md — [BLOCKING] Schema push to Supabase + verification checkpoint
+- [x] 01-03-PLAN.md — [BLOCKING] Schema push to Supabase + verification checkpoint
 - [ ] 01-04-PLAN.md — State machine TDD: CallingStatus types + VALID_TRANSITIONS + test suite
 - [ ] 01-05-PLAN.md — Auth routes: login, check, logout with rate limiting and session fixation prevention
 - [ ] 01-06-PLAN.md — Calling API routes: roster, create, transition, pending inbox
