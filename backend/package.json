@@ -1,0 +1,42 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "bcryptjs": "^3.0.3",
+    "connect-pg-simple": "^10.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-session": "^1.19.0",
+    "express-slow-down": "^3.1.0",
+    "helmet": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^25.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "5.8",
+    "vitest": "^4.1.7"
+  }
+}
