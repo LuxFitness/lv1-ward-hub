@@ -18,7 +18,7 @@ This project uses the GSD workflow. Planning artifacts live in `.planning/`.
 
 ## Stack
 
-- **Frontend**: React 18 + Vite 6, TypeScript 5, shadcn/ui + Tailwind CSS 3
+- **Frontend**: React 18 + Vite 6, TypeScript 5, shadcn/ui + Tailwind CSS 4 (via `@tailwindcss/vite` plugin — no `tailwind.config.js` needed; configure via CSS `@theme`)
 - **State**: TanStack Query v5 (server state), Zustand v5 (UI state)
 - **Forms**: React Hook Form v7 + Zod v4
 - **Backend**: Express 4, TypeScript

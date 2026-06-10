@@ -830,22 +830,16 @@ Paste the output (starting with `$2a$12$...`) into Render's environment variable
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Supabase direct Postgres connection string availability**
-   - What we know: connect-pg-simple requires the direct Postgres URL, not the Supabase API URL
-   - What's unclear: Whether the existing Supabase project is on a plan tier that exposes direct connections (free tier does expose it)
-   - Recommendation: Wave 0 task — confirm Supabase DB URL is accessible from backend/.env before writing session store code
+1. **Supabase direct Postgres connection string availability** ✓ RESOLVED
+   - Resolution: Supabase free tier exposes the direct Postgres connection string in Project Settings → Database → Connection string (URI mode). connect-pg-simple uses this. Executor must confirm `DATABASE_URL` is set in `backend/.env` before Wave 2.
 
-2. **Ward organization list completeness**
-   - What we know: 8 standard orgs seeded in schema (see Database Schema)
-   - What's unclear: Whether Long Valley 1st Ward has non-standard orgs (e.g., Self-Reliance, JustServe coordinator)
-   - Recommendation: Seed the standard 8; make org_units editable in a later plan wave. Positions can reference any org_unit, so adding new orgs is additive.
+2. **Ward organization list completeness** ✓ RESOLVED
+   - Resolution: Seed the standard 8 orgs (Bishopric, EQ, RS, YM, YW, Primary, Sunday School, Ward Council). org_units table is editable — adding non-standard orgs is additive and can be done without migrations. No blocker.
 
-3. **Shared password rotation plan**
-   - What we know: Password is changed by updating APP_PASSWORD_HASH in Render env vars and redeploying
-   - What's unclear: Whether the user wants a UI to rotate the password, or is comfortable with env var rotation
-   - Recommendation: Env var rotation is sufficient for v1; document the `bcrypt.hash()` command in CLAUDE.md
+3. **Shared password rotation plan** ✓ RESOLVED
+   - Resolution: Env var rotation is sufficient for v1. Rotation procedure: run `node -e "require('bcryptjs').hash('newpassword',12).then(console.log)"`, update `APP_PASSWORD_HASH` in Render env vars, redeploy. No UI needed.
 
 ---
 
