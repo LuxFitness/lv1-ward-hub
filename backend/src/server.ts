@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
+import { authRouter } from './routes/auth';
 
 // Augment express-session to include authenticated flag
 declare module 'express-session' {
@@ -33,23 +34,32 @@ app.use(cors({
 // Body parsing
 app.use(express.json());
 
+// Session store: use in-memory store in test environment to avoid Postgres connection
+// In production, sessions are stored in Supabase Postgres (survive Render restarts — AUTH-02)
+const sessionStore = process.env.NODE_ENV === 'test'
+  ? undefined
+  : new PGStore({
+      conString: process.env.SUPABASE_DB_URL,
+      createTableIfMissing: true,
+    });
+
 // Session with Postgres store (sessions survive Render restarts)
 app.use(session({
-  store: new PGStore({
-    conString: process.env.SUPABASE_DB_URL,
-    createTableIfMissing: true,
-  }),
+  store: sessionStore,
   secret: process.env.SESSION_SECRET!,
   resave: false,
   saveUninitialized: false,
   rolling: true,          // Reset maxAge on activity (recommended ASVS)
   cookie: {
-    secure: true,
+    secure: process.env.NODE_ENV !== 'test', // Allow non-HTTPS in tests
     httpOnly: true,
     sameSite: 'lax',      // NOT 'strict' — cross-origin POST requires lax
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   },
 }));
+
+// Auth routes — mounted BEFORE requireAuth (auth endpoints are public)
+app.use('/api/auth', authRouter);
 
 // Health check (no auth required)
 app.get('/api/health', (_req, res) => {
