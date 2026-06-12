@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Roadmap created; ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability written
-last_updated: "2026-06-10T03:33:51.213Z"
-last_activity: 2026-06-10 -- Phase 01 execution started
+stopped_at: "01-07-PLAN.md complete — member roster CRUD API with requireAuth, 51 tests passing"
+last_updated: "2026-06-12T03:07:39Z"
+last_activity: 2026-06-12 -- Phase 01 plan 07 complete (member CRUD API)
 progress:
   total_phases: 5
   completed_phases: 0
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-26)
 ## Current Position
 
 Phase: 01 (calling-pipeline-and-auth) — EXECUTING
-Plan: 1 of 10
+Plan: 8 of 10 (plans 01–07 complete)
 Status: Executing Phase 01
-Last activity: 2026-06-10 -- Phase 01 execution started
+Last activity: 2026-06-12 -- 01-07 complete: member roster CRUD API (GET, POST, PATCH, DELETE, GET calling)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] ~14% (7 of 10 Phase 01 plans complete)
 
 ## Performance Metrics
 
@@ -65,6 +65,9 @@ Recent decisions affecting current work:
 - Phase 1: Vacancy is a JOIN query result (no active set_apart calling), not a database status value — positions table is separate from callings table
 - Phase 1: Append-only calling_events log is cheap to add in Phase 1 schema and avoids regret — include it
 - Phase 2/3: All Google API calls route through Express; browser never holds credentials
+- 01-07: Member schema is name-only — no contact info; extra body fields silently ignored
+- 01-07: DELETE does not guard for active callings — schema ON DELETE SET NULL handles cascade
+- 01-07: GET /api/members/:id/calling returns null (not 404) when no active calling — cleaner for frontend
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-26
-Stopped at: Roadmap created; ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability written
+Last session: 2026-06-12
+Stopped at: 01-07-PLAN.md complete — member roster CRUD API (5 endpoints, 22 tests, all 51 passing)
 Resume file: None

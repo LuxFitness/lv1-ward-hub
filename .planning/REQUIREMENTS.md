@@ -15,9 +15,9 @@
 
 ### Member Roster
 
-- [ ] **MBR-01**: User can add members to the ward roster (name only — no contact info)
-- [ ] **MBR-02**: User can edit or remove a member from the roster
-- [ ] **MBR-03**: User can view which calling a member currently holds
+- [x] **MBR-01**: User can add members to the ward roster (name only — no contact info)
+- [x] **MBR-02**: User can edit or remove a member from the roster
+- [x] **MBR-03**: User can view which calling a member currently holds
 
 ### Google Calendar Integration
 
@@ -87,9 +87,9 @@
 | CALL-06 | Phase 1 — Calling Pipeline & Auth | Pending |
 | CALL-07 | Phase 1 — Calling Pipeline & Auth | Pending |
 | CALL-08 | Phase 1 — Calling Pipeline & Auth | Pending |
-| MBR-01 | Phase 1 — Calling Pipeline & Auth | Pending |
-| MBR-02 | Phase 1 — Calling Pipeline & Auth | Pending |
-| MBR-03 | Phase 1 — Calling Pipeline & Auth | Pending |
+| MBR-01 | Phase 1 — Calling Pipeline & Auth | Complete — 01-07 |
+| MBR-02 | Phase 1 — Calling Pipeline & Auth | Complete — 01-07 |
+| MBR-03 | Phase 1 — Calling Pipeline & Auth | Complete — 01-07 |
 | AUTH-01 | Phase 1 — Calling Pipeline & Auth | Pending |
 | AUTH-02 | Phase 1 — Calling Pipeline & Auth | Pending |
 | AUTH-03 | Phase 1 — Calling Pipeline & Auth | Pending |
