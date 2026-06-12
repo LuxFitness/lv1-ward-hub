@@ -8,6 +8,7 @@ import connectPg from 'connect-pg-simple';
 import { authRouter } from './routes/auth';
 import { requireAuth } from './middleware/auth';
 import { callingsRouter } from './routes/callings';
+import { membersRouter } from './routes/members';
 
 // Augment express-session to include authenticated flag
 declare module 'express-session' {
@@ -65,6 +66,9 @@ app.use('/api/auth', authRouter);
 
 // Calling pipeline routes — require auth
 app.use('/api/callings', requireAuth, callingsRouter);
+
+// Member roster routes — require auth
+app.use('/api/members', requireAuth, membersRouter);
 
 // Health check (no auth required)
 app.get('/api/health', (_req, res) => {
