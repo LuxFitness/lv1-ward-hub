@@ -6,6 +6,8 @@ import helmet from 'helmet';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 import { authRouter } from './routes/auth';
+import { requireAuth } from './middleware/auth';
+import { callingsRouter } from './routes/callings';
 
 // Augment express-session to include authenticated flag
 declare module 'express-session' {
@@ -60,6 +62,9 @@ app.use(session({
 
 // Auth routes — mounted BEFORE requireAuth (auth endpoints are public)
 app.use('/api/auth', authRouter);
+
+// Calling pipeline routes — require auth
+app.use('/api/callings', requireAuth, callingsRouter);
 
 // Health check (no auth required)
 app.get('/api/health', (_req, res) => {

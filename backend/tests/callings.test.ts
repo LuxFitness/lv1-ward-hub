@@ -177,15 +177,19 @@ async function getApp() {
   return app;
 }
 
-// Helper: log in and return authenticated agent
+// Shared authenticated agent — created once to avoid hitting the login rate limiter (5/15min).
+// Session persists across tests; resetStore() clears DB data but not the session.
+let _cachedAgent: ReturnType<typeof request.agent> | null = null;
+
 async function authenticatedAgent() {
+  if (_cachedAgent) return _cachedAgent;
   const app = await getApp();
-  const agent = request.agent(app);
-  await agent
+  _cachedAgent = request.agent(app);
+  await _cachedAgent
     .post('/api/auth/login')
     .send({ password: 'testpass' })
     .set('Content-Type', 'application/json');
-  return agent;
+  return _cachedAgent;
 }
 
 // Helper: get the mock supabase store
