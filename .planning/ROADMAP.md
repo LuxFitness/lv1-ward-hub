@@ -49,9 +49,9 @@ Plans:
 - [x] 01-03-PLAN.md — [BLOCKING] Schema push to Supabase + verification checkpoint
 - [x] 01-04-PLAN.md — State machine TDD: CallingStatus types + VALID_TRANSITIONS + test suite
 - [x] 01-05-PLAN.md — Auth routes: login, check, logout with rate limiting and session fixation prevention
-- [ ] 01-06-PLAN.md — Calling API routes: roster, create, transition, pending inbox
+- [x] 01-06-PLAN.md — Calling API routes: roster, create, transition, pending inbox
 - [x] 01-07-PLAN.md — Member CRUD API: list, create, update, delete, current-calling lookup
-- [ ] 01-08-PLAN.md — Frontend scaffold: Vite + shadcn/ui + Tailwind v4 + LoginPage + apiFetch + uiStore
+- [x] 01-08-PLAN.md — Frontend scaffold: Vite + shadcn/ui + Tailwind v4 + LoginPage + apiFetch + uiStore
 - [ ] 01-09-PLAN.md — Roster UI: RosterView (org-grouped) + CallingPanel (Sheet with valid-only actions)
 - [ ] 01-10-PLAN.md — Pending Inbox + MemberSearch typeahead + Members management tab
 
