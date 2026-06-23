@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "01-07-PLAN.md complete — member roster CRUD API with requireAuth, 51 tests passing"
-last_updated: "2026-06-12T03:07:39Z"
-last_activity: 2026-06-12 -- Phase 01 plan 07 complete (member CRUD API)
+stopped_at: "01-09-PLAN.md complete — calling roster UI (RosterView + CallingPanel + QueryClientProvider)"
+last_updated: "2026-06-23T00:00:00Z"
+last_activity: 2026-06-23 -- Phase 01 plan 09 complete (RosterView + CallingPanel)
 progress:
   total_phases: 5
   completed_phases: 0
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-26)
 ## Current Position
 
 Phase: 01 (calling-pipeline-and-auth) — EXECUTING
-Plan: 8 of 10 (plans 01–07 complete)
+Plan: 10 of 10 (plans 01–09 complete, 01-10 remaining)
 Status: Executing Phase 01
-Last activity: 2026-06-12 -- 01-07 complete: member roster CRUD API (GET, POST, PATCH, DELETE, GET calling)
+Last activity: 2026-06-23 -- 01-09 complete: calling roster UI (RosterView + CallingPanel + QueryClientProvider)
 
-Progress: [██░░░░░░░░] ~14% (7 of 10 Phase 01 plans complete)
+Progress: [█████████░] ~90% (9 of 10 Phase 01 plans complete)
 
 ## Performance Metrics
 
@@ -88,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-12
-Stopped at: 01-07-PLAN.md complete — member roster CRUD API (5 endpoints, 22 tests, all 51 passing)
+Last session: 2026-06-23
+Stopped at: 01-09-PLAN.md complete — calling roster UI (RosterView org-grouped, CallingPanel Sheet, QueryClientProvider)
 Resume file: None

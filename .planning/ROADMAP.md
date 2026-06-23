@@ -52,7 +52,7 @@ Plans:
 - [x] 01-06-PLAN.md — Calling API routes: roster, create, transition, pending inbox
 - [x] 01-07-PLAN.md — Member CRUD API: list, create, update, delete, current-calling lookup
 - [x] 01-08-PLAN.md — Frontend scaffold: Vite + shadcn/ui + Tailwind v4 + LoginPage + apiFetch + uiStore
-- [ ] 01-09-PLAN.md — Roster UI: RosterView (org-grouped) + CallingPanel (Sheet with valid-only actions)
+- [x] 01-09-PLAN.md — Roster UI: RosterView (org-grouped) + CallingPanel (Sheet with valid-only actions)
 - [ ] 01-10-PLAN.md — Pending Inbox + MemberSearch typeahead + Members management tab
 
 **UI hint**: yes
@@ -97,7 +97,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Google Cloud Setup | 0/TBD | Not started | - |
-| 1. Calling Pipeline & Auth | 7/10 | Executing | - |
+| 1. Calling Pipeline & Auth | 9/10 | Executing | - |
 | 2. Google Calendar Integration | 0/TBD | Not started | - |
 | 3. Google Sheets Import | 0/TBD | Not started | - |
 | 4. Sacrament Meeting Planning | 0/TBD | Not started | - |
