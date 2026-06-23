@@ -114,7 +114,7 @@ export function CalendarView() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-card shrink-0">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Bishopric Calendar</p>
         <button
-          onClick={() => setEditing(true)}
+          onClick={clear}
           className="text-xs text-muted-foreground hover:text-primary transition-colors"
         >
           Change calendar

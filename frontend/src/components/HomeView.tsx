@@ -8,7 +8,6 @@ import { ORG_NAMES } from '@/lib/mockData';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-const PIPELINE_STATUS_ORDER: CallingStatus[] = ['recommended', 'extended', 'accepted', 'sustained'];
 
 const STATUS_LABELS: Record<CallingStatus, string> = {
   recommended: 'Proposed',
