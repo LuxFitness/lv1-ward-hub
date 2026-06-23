@@ -115,8 +115,8 @@ export interface SpeakerSlot {
 export interface SacramentWeek {
   id: string;
   date: string;
-  presiding: string;
-  conducting: string;
+  presiding: string | null;
+  conducting: string | null;
   stake_business: boolean;
   ward_business: boolean;
   move_ins: string[];
