@@ -59,7 +59,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV !== 'test', // Allow non-HTTPS in tests
     httpOnly: true,
-    sameSite: 'lax',      // NOT 'strict' — cross-origin POST requires lax
+    sameSite: process.env.NODE_ENV !== 'test' ? 'none' : 'lax', // 'none' required for cross-origin (Vercel→Render)
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   },
 }));
