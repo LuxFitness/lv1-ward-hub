@@ -9,6 +9,9 @@ import { authRouter } from './routes/auth';
 import { requireAuth } from './middleware/auth';
 import { callingsRouter } from './routes/callings';
 import { membersRouter } from './routes/members';
+import { sacramentRouter } from './routes/sacrament';
+import { agendaRouter } from './routes/agenda';
+import { calendarRouter } from './routes/calendar';
 
 // Augment express-session to include authenticated flag
 declare module 'express-session' {
@@ -69,6 +72,15 @@ app.use('/api/callings', requireAuth, callingsRouter);
 
 // Member roster routes — require auth
 app.use('/api/members', requireAuth, membersRouter);
+
+// Sacrament meeting planner — require auth
+app.use('/api/sacrament', requireAuth, sacramentRouter);
+
+// Meeting agendas (Bishopric / Ward Council) — require auth
+app.use('/api/agenda', requireAuth, agendaRouter);
+
+// Google Calendar proxy — require auth
+app.use('/api/calendar', requireAuth, calendarRouter);
 
 // Health check (no auth required)
 app.get('/api/health', (_req, res) => {
