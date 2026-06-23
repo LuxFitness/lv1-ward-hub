@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+export type Tab = 'home' | 'pipeline' | 'sacrament' | 'move-ins' | 'roster' | 'members' | 'meetings' | 'calendar';
+
 interface UiState {
   // Auth state
   isAuthenticated: boolean;
@@ -8,6 +10,10 @@ interface UiState {
   setAuthenticated: (val: boolean) => void;
   setLoading: (val: boolean) => void;
   setError: (msg: string | null) => void;
+
+  // Navigation
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
 
   // Panel state
   panelOpen: boolean;
@@ -27,6 +33,10 @@ export const useUiStore = create<UiState>((set) => ({
   setAuthenticated: (val) => set({ isAuthenticated: val }),
   setLoading: (val) => set({ isLoading: val }),
   setError: (msg) => set({ error: msg }),
+
+  // Navigation
+  activeTab: 'home',
+  setActiveTab: (tab) => set({ activeTab: tab }),
 
   // Panel state
   panelOpen: false,

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { useUiStore } from '@/store/uiStore';
+import type { Tab } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
 import type { RosterEntry, PendingCalling, CallingStatus } from '@/types';
 import type { UpcomingOrdinance, SacramentWeek, MoveIn } from '@/lib/mockData';
@@ -35,43 +36,67 @@ const ORDINANCE_ICON: Record<UpcomingOrdinance['type'], string> = {
   patriarchal: '📜',
 };
 
+function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function formatShortDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseLocalDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatDayOfWeek(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return parseLocalDate(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 function daysUntil(iso: string) {
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.ceil((parseLocalDate(iso).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function daysAgo(iso: string) {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.floor((today.getTime() - parseLocalDate(iso).getTime()) / (1000 * 60 * 60 * 24));
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function SectionCard({ title, children, badge }: { title: string; children: React.ReactNode; badge?: number | string }) {
+function SectionCard({ title, children, badge, onNavigate }: {
+  title: string;
+  children: React.ReactNode;
+  badge?: number | string;
+  onNavigate?: () => void;
+}) {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-      <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
-        {badge !== undefined && (
-          <span className="text-xs font-bold text-muted-foreground">{badge}</span>
+      <div
+        className={cn(
+          'px-5 py-3.5 border-b border-border flex items-center justify-between',
+          onNavigate && 'cursor-pointer hover:bg-muted/40 transition-colors group',
         )}
+        onClick={onNavigate}
+      >
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
+        <div className="flex items-center gap-2">
+          {badge !== undefined && (
+            <span className="text-xs font-bold text-muted-foreground">{badge}</span>
+          )}
+          {onNavigate && (
+            <span className="text-muted-foreground/50 group-hover:text-muted-foreground transition-colors text-xs">→</span>
+          )}
+        </div>
       </div>
       <div>{children}</div>
     </div>
   );
 }
 
-function StatTile({ label, value, sub, color = 'default' }: {
+function StatTile({ label, value, sub, color = 'default', onClick }: {
   label: string;
   value: number | string;
   sub?: string;
   color?: 'default' | 'red' | 'gold' | 'green' | 'blue';
+  onClick?: () => void;
 }) {
   const valueColor = {
     default: 'text-foreground',
@@ -90,7 +115,17 @@ function StatTile({ label, value, sub, color = 'default' }: {
   }[color];
 
   return (
-    <div className={cn('bg-card border border-border rounded-xl p-5 border-t-4', borderColor)}>
+    <div
+      className={cn(
+        'bg-card border border-border rounded-xl p-5 border-t-4 transition-colors',
+        borderColor,
+        onClick && 'cursor-pointer hover:bg-muted/40',
+      )}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
+    >
       <p className={cn('text-3xl font-bold tracking-tight', valueColor)}>{value}</p>
       <p className="text-sm font-medium text-foreground mt-1">{label}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
@@ -249,7 +284,8 @@ export function HomeView() {
   const { data: sacrament, isLoading: r4 } = useQuery({ queryKey: ['sacrament'], queryFn: () => apiFetch<SacramentWeek[]>('/api/sacrament') });
   const { data: moveIns, isLoading: r5 } = useQuery({ queryKey: ['move-ins'], queryFn: () => apiFetch<MoveIn[]>('/api/move-ins') });
 
-  const { openPanel } = useUiStore();
+  const { openPanel, setActiveTab } = useUiStore();
+  const nav = (tab: Tab) => () => setActiveTab(tab);
 
   if (r1 || r2 || r3 || r4 || r5) {
     return (
@@ -279,9 +315,9 @@ export function HomeView() {
     <div className="pb-10">
       {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-6">
-        <StatTile label="Vacant Positions" value={vacantCount} sub="need a calling" color="red" />
-        <StatTile label="In Pipeline" value={pipelineCount} sub={urgentCount > 0 ? `${urgentCount} overdue` : 'on track'} color="blue" />
-        <StatTile label="Upcoming Ordinances" value={upcoming?.length ?? 0} sub={upcomingSoonCount > 0 ? `${upcomingSoonCount} in 2 weeks` : 'scheduled'} color="gold" />
+        <StatTile label="Vacant Positions" value={vacantCount} sub="need a calling" color="red" onClick={nav('roster')} />
+        <StatTile label="In Pipeline" value={pipelineCount} sub={urgentCount > 0 ? `${urgentCount} overdue` : 'on track'} color="blue" onClick={nav('pipeline')} />
+        <StatTile label="Upcoming Ordinances" value={upcoming?.length ?? 0} sub={upcomingSoonCount > 0 ? `${upcomingSoonCount} in 2 weeks` : 'scheduled'} color="gold" onClick={nav('move-ins')} />
         <StatTile label="Protecting Children" value="97%" sub="training complete" color="green" />
       </div>
 
@@ -293,14 +329,14 @@ export function HomeView() {
 
           {/* This Sunday */}
           {nextSunday && (
-            <SectionCard title="This Sunday">
+            <SectionCard title="This Sunday" onNavigate={nav('sacrament')}>
               <ThisSunday week={nextSunday} />
             </SectionCard>
           )}
 
           {/* Proposed Callings */}
           {proposedCallings.length > 0 && (
-            <SectionCard title="Proposed — Needs Discussion" badge={proposedCallings.length}>
+            <SectionCard title="Proposed — Needs Discussion" badge={proposedCallings.length} onNavigate={nav('pipeline')}>
               {proposedCallings.map(c => (
                 <PipelineRow key={c.id} calling={c} onOpen={() => openPanel(c.id)} />
               ))}
@@ -309,7 +345,7 @@ export function HomeView() {
 
           {/* Active Pipeline */}
           {inProgressCallings.length > 0 && (
-            <SectionCard title="Calling Pipeline" badge={inProgressCallings.length}>
+            <SectionCard title="Calling Pipeline" badge={inProgressCallings.length} onNavigate={nav('pipeline')}>
               {inProgressCallings.map(c => (
                 <PipelineRow key={c.id} calling={c} onOpen={() => openPanel(c.id)} />
               ))}
@@ -323,7 +359,7 @@ export function HomeView() {
 
           {/* Upcoming Ordinances */}
           {upcomingOrdinances.length > 0 && (
-            <SectionCard title="Upcoming Ordinances & Events" badge={upcomingOrdinances.length}>
+            <SectionCard title="Upcoming Ordinances & Events" badge={upcomingOrdinances.length} onNavigate={nav('move-ins')}>
               {upcomingOrdinances.map(item => (
                 <OrdinanceRow key={item.id} item={item} />
               ))}
@@ -332,7 +368,7 @@ export function HomeView() {
 
           {/* Recent Move-Ins */}
           {recentMoveIns.length > 0 && (
-            <SectionCard title="Recent Move-Ins" badge={recentMoveIns.length}>
+            <SectionCard title="Recent Move-Ins" badge={recentMoveIns.length} onNavigate={nav('move-ins')}>
               {recentMoveIns.map(p => (
                 <RecentMoveIn key={p.id} person={p} />
               ))}
@@ -341,7 +377,7 @@ export function HomeView() {
 
           {/* Vacant Positions */}
           {vacantCount > 0 && (
-            <SectionCard title="Vacant Positions" badge={vacantCount}>
+            <SectionCard title="Vacant Positions" badge={vacantCount} onNavigate={nav('roster')}>
               <VacantByOrg roster={roster ?? []} />
             </SectionCard>
           )}

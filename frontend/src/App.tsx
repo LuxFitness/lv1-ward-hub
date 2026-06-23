@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { apiFetch, ApiError, IS_MOCK } from './lib/api';
 import { useUiStore } from './store/uiStore';
+import type { Tab } from './store/uiStore';
 import { LoginPage } from './components/LoginPage';
 import { RosterView } from './components/RosterView';
 import { HomeView } from './components/HomeView';
@@ -22,8 +23,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-type Tab = 'home' | 'pipeline' | 'sacrament' | 'move-ins' | 'roster' | 'members' | 'meetings' | 'calendar';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'home',      label: 'Dashboard' },
@@ -90,8 +89,7 @@ function MembersView() {
 // ── App shell ──────────────────────────────────────────────────────────────
 
 function AppShell() {
-  const { isAuthenticated, isLoading, setAuthenticated, setLoading } = useUiStore();
-  const [activeTab, setActiveTab] = useState<Tab>('home');
+  const { isAuthenticated, isLoading, setAuthenticated, setLoading, activeTab, setActiveTab } = useUiStore();
 
   useEffect(() => {
     if (IS_MOCK) {

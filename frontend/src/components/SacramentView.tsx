@@ -6,16 +6,23 @@ import type { SacramentWeek, SpeakerSlot } from '@/lib/mockData';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+// Parse YYYY-MM-DD as local date (not UTC) to avoid off-by-one-day in US timezones
+function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return parseLocalDate(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 function shortDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseLocalDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function daysUntil(iso: string) {
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.ceil((parseLocalDate(iso).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 // ── EditableText ───────────────────────────────────────────────────────────────
@@ -352,24 +359,42 @@ function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
 // ── Aside week item ────────────────────────────────────────────────────────────
 
 function WeekAsideItem({
-  week, isActive, onClick,
-}: { week: SacramentWeek; isActive: boolean; onClick: () => void }) {
+  week, isActive, onClick, onUpdate,
+}: {
+  week: SacramentWeek;
+  isActive: boolean;
+  onClick: () => void;
+  onUpdate: (updates: Partial<SacramentWeek>) => void;
+}) {
   const days   = daysUntil(week.date);
   const isPast = days < -1;
   const isSoon = days >= 0 && days <= 7;
 
+  function updateSpeaker(idx: number, field: keyof SpeakerSlot, value: string | null) {
+    const speakers = week.speakers.map((s, i) =>
+      i === idx ? { ...s, [field]: value } : s
+    );
+    onUpdate({ speakers });
+  }
+
   return (
-    <button
-      onClick={onClick}
+    <div
       className={cn(
-        'w-full text-left px-4 py-3.5 border-b border-border transition-colors',
+        'w-full border-b border-border transition-colors',
         isActive
           ? 'bg-primary/8 border-l-2 border-l-primary'
           : 'hover:bg-muted/60 border-l-2 border-l-transparent',
         isPast && 'opacity-50',
       )}
     >
-      <div className="flex items-center justify-between mb-2">
+      {/* Clickable header — scrolls to week */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}
+        className="flex items-center justify-between px-4 pt-3.5 pb-2 cursor-pointer"
+      >
         <span className={cn('text-xs font-bold', isSoon ? 'text-primary' : 'text-foreground')}>
           {shortDate(week.date)}
         </span>
@@ -382,26 +407,39 @@ function WeekAsideItem({
           {isPast ? 'Past' : week.approved ? '✓' : `${days}d`}
         </span>
       </div>
-      <div className="space-y-1">
+
+      {/* Speaker rows — editable when active */}
+      <div className="px-4 pb-3.5 space-y-1.5">
         {week.speakers.map((s, i) => (
-          <div key={i} className="flex gap-1.5 items-baseline min-w-0">
-            <span className="text-[10px] text-muted-foreground shrink-0 w-12 leading-relaxed">{s.slot}</span>
-            <span className={cn('text-[11px] leading-relaxed truncate', s.name ? 'text-foreground font-medium' : 'text-muted-foreground italic')}>
-              {s.name ?? 'TBD'}
-            </span>
+          <div key={i} className="min-w-0">
+            <span className="text-[10px] text-muted-foreground block mb-0.5">{s.slot}</span>
+            {isActive ? (
+              <div className="space-y-0.5">
+                <EditableText
+                  value={s.name}
+                  onChange={v => updateSpeaker(i, 'name', v)}
+                  placeholder="Speaker name"
+                  emptyLabel="Not assigned"
+                  className={cn('text-[11px]', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
+                />
+                <EditableText
+                  value={s.topic}
+                  onChange={v => updateSpeaker(i, 'topic', v)}
+                  placeholder="Topic"
+                  emptyLabel="No topic"
+                  className="text-[10px] text-muted-foreground"
+                />
+              </div>
+            ) : (
+              <span className={cn('text-[11px] truncate block', s.name ? 'text-foreground font-medium' : 'text-muted-foreground italic')}>
+                {s.name ?? 'TBD'}
+                {s.topic && <span className="text-muted-foreground font-normal"> · {s.topic}</span>}
+              </span>
+            )}
           </div>
         ))}
-        {week.speakers.some(s => s.topic) && (
-          <div className="mt-1 pt-1 border-t border-border/60">
-            {week.speakers.filter(s => s.topic).map((s, i) => (
-              <p key={i} className="text-[10px] text-muted-foreground truncate leading-relaxed">
-                {s.name}: {s.topic}
-              </p>
-            ))}
-          </div>
-        )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -545,6 +583,7 @@ export function SacramentView() {
             week={week}
             isActive={activeId === week.id}
             onClick={() => scrollToWeek(week.id)}
+            onUpdate={updates => handleUpdate(week.id, updates)}
           />
         ))}
       </aside>
