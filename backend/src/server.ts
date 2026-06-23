@@ -4,7 +4,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
-import connectPg from 'connect-pg-simple';
 import { authRouter } from './routes/auth';
 import { requireAuth } from './middleware/auth';
 import { callingsRouter } from './routes/callings';
@@ -19,8 +18,6 @@ declare module 'express-session' {
     authenticated: boolean;
   }
 }
-
-const PGStore = connectPg(session);
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -40,18 +37,8 @@ app.use(cors({
 // Body parsing
 app.use(express.json());
 
-// Session store: use in-memory store in test environment to avoid Postgres connection
-// In production, sessions are stored in Supabase Postgres (survive Render restarts — AUTH-02)
-const sessionStore = process.env.NODE_ENV === 'test'
-  ? undefined
-  : new PGStore({
-      conString: process.env.SUPABASE_DB_URL,
-      createTableIfMissing: true,
-    });
-
-// Session with Postgres store (sessions survive Render restarts)
+// In-memory session store — simple and reliable; sessions reset on Render restart
 app.use(session({
-  store: sessionStore,
   secret: process.env.SESSION_SECRET!,
   resave: false,
   saveUninitialized: false,
