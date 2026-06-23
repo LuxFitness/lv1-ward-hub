@@ -10,12 +10,15 @@ export const authRouter = Router();
 authRouter.post('/login', loginSlowDown, loginRateLimiter, async (req, res) => {
   const { password } = req.body as { password?: string };
   const hash = process.env.APP_PASSWORD_HASH;
+  const plain = process.env.APP_PASSWORD;
 
-  if (!hash || !password) {
+  if (!password || (!hash && !plain)) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const match = await bcrypt.compare(password, hash);
+  const match = hash
+    ? await bcrypt.compare(password, hash)
+    : password === plain;
   if (!match) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
