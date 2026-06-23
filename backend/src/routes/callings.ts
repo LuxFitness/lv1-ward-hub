@@ -122,6 +122,20 @@ callingsRouter.get('/pending', async (_req, res) => {
   res.json(pending);
 });
 
+// ─── CALL-09: Single calling detail ──────────────────────────────────────────
+callingsRouter.get('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { data, error } = await supabase
+    .from('callings')
+    .select(`id, status, state_entered_at, bishopric_owner, notes, position_id,
+             positions(name, org_unit_id, org_units(name)),
+             members(name)`)
+    .eq('id', id)
+    .single();
+  if (error || !data) return res.status(404).json({ error: 'Not found' });
+  res.json(data);
+});
+
 // ─── CALL-03: Create pipeline entry ──────────────────────────────────────────
 //
 // Creates a new calling starting at 'recommended' and inserts the initial
