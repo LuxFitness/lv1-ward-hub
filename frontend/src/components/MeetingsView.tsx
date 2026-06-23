@@ -279,7 +279,7 @@ function MeetingCard({ meeting, isUpcoming }: { meeting: MeetingAgenda; isUpcomi
   });
 
   const days               = daysUntil(meeting.meeting_date);
-  const pendingActions     = meeting.action_items.filter(a => !a.completed);
+  const pendingActions     = meeting.action_items.filter(a => !a.completed).length;
   const openDiscussions    = meeting.agenda_items.filter(i => i.status === 'pending').length;
 
   return (
