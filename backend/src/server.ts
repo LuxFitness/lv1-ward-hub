@@ -29,9 +29,18 @@ app.set('trust proxy', 1);
 app.use(helmet());
 
 // Cross-origin support (Vercel frontend + Render backend)
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL,
+  'https://lv1-ward-hub.vercel.app',
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true, // Required: enables Set-Cookie cross-origin
+  origin: (origin, cb) => {
+    // Allow same-origin requests (no Origin header) and listed origins
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
 }));
 
 // Body parsing
