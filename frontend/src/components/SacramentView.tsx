@@ -466,9 +466,18 @@ function WeekAsideItem({
   onUpdate: (updates: Partial<SacramentWeek>) => void;
   members: string[];
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const days   = daysUntil(week.date);
   const isPast = days < -1;
   const isSoon = days >= 0 && days <= 7;
+
+  const assignedNames = week.speakers
+    .filter(s => s.name)
+    .map(s => s.name!.split(' ').at(-1))  // last names only to save space
+    .join(', ');
+
+  const primaryTopic = week.speakers.find(s => s.topic)?.topic ?? null;
 
   function updateSpeaker(idx: number, field: keyof SpeakerSlot, value: string | null) {
     const speakers = week.speakers.map((s, i) =>
@@ -485,50 +494,72 @@ function WeekAsideItem({
         isPast && 'opacity-50',
       )}
     >
-      {/* Clickable header — scrolls to week */}
+      {/* Compact summary tile — click to scroll to week */}
       <div
         role="button"
         tabIndex={0}
         onClick={onClick}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick()}
-        className="flex items-center justify-between px-4 pt-3.5 pb-2 cursor-pointer"
+        className="px-3 pt-2.5 pb-2 cursor-pointer hover:bg-muted/30 transition-colors"
       >
-        <span className={cn('text-xs font-bold', isSoon ? 'text-primary' : 'text-foreground')}>
-          {shortDate(week.date)}
-        </span>
-        <span className={cn(
-          'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
-          week.approved
-            ? 'bg-emerald-50 text-emerald-600'
-            : isSoon ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
-        )}>
-          {isPast ? 'Past' : week.approved ? '✓' : `${days}d`}
-        </span>
+        <div className="flex items-center justify-between gap-1">
+          <span className={cn('text-xs font-bold shrink-0', isSoon ? 'text-primary' : 'text-foreground')}>
+            {shortDate(week.date)}
+          </span>
+          <span className={cn(
+            'text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0',
+            week.approved
+              ? 'bg-emerald-50 text-emerald-600'
+              : isSoon ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
+          )}>
+            {isPast ? 'Past' : week.approved ? '✓' : `${days}d`}
+          </span>
+        </div>
+
+        {assignedNames ? (
+          <p className="text-[11px] text-foreground mt-0.5 truncate leading-tight">{assignedNames}</p>
+        ) : (
+          <p className="text-[11px] text-amber-600 italic mt-0.5 leading-tight">No speakers</p>
+        )}
+
+        {primaryTopic && (
+          <p className="text-[10px] text-muted-foreground mt-0.5 truncate leading-tight">{primaryTopic}</p>
+        )}
       </div>
 
-      {/* Speaker rows — always editable */}
-      <div className="px-4 pb-3.5 space-y-2">
-        {week.speakers.map((s, i) => (
-          <div key={i} className="min-w-0">
-            <span className="text-[10px] text-muted-foreground block mb-0.5">{s.slot}</span>
-            <MemberSearchField
-              value={s.name}
-              onChange={v => updateSpeaker(i, 'name', v)}
-              members={members}
-              placeholder="Search members…"
-              emptyLabel="Not assigned"
-              className={cn('text-[11px]', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
-            />
-            <EditableText
-              value={s.topic}
-              onChange={v => updateSpeaker(i, 'topic', v)}
-              placeholder="Topic"
-              emptyLabel="No topic"
-              className="text-[10px] text-muted-foreground"
-            />
-          </div>
-        ))}
-      </div>
+      {/* Expand/collapse edit toggle */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full text-[10px] text-muted-foreground hover:text-primary py-1 px-3 text-left border-t border-dashed border-border/50 transition-colors"
+      >
+        {expanded ? '▲ Hide' : '▼ Edit speakers'}
+      </button>
+
+      {/* Expanded speaker editor */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 space-y-2.5">
+          {week.speakers.map((s, i) => (
+            <div key={i} className="min-w-0">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground block mb-0.5">{s.slot}</span>
+              <MemberSearchField
+                value={s.name}
+                onChange={v => updateSpeaker(i, 'name', v)}
+                members={members}
+                placeholder="Search members…"
+                emptyLabel="Not assigned"
+                className={cn('text-[11px]', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
+              />
+              <EditableText
+                value={s.topic}
+                onChange={v => updateSpeaker(i, 'topic', v)}
+                placeholder="Topic"
+                emptyLabel="No topic"
+                className="text-[10px] text-muted-foreground"
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

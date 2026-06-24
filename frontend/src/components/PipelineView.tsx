@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { useUiStore } from '@/store/uiStore';
+import { useCreateCalling } from '@/hooks/useCallings';
+import { MemberCombobox } from '@/components/MemberCombobox';
 import { cn } from '@/lib/utils';
-import type { RosterEntry, CallingStatus } from '@/types';
+import type { RosterEntry, CallingStatus, Member } from '@/types';
 
 // ── Column definitions ─────────────────────────────────────────────────────
 
@@ -168,6 +171,120 @@ function PipelineColumn({ col, entries, onOpen }: ColumnProps) {
   );
 }
 
+// ── Add Calling Form ───────────────────────────────────────────────────────
+
+function AddCallingForm({ roster, onClose }: { roster: RosterEntry[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const createCalling = useCreateCalling();
+  const [selectedOrgId, setSelectedOrgId]         = useState('');
+  const [selectedPositionId, setSelectedPositionId] = useState('');
+  const [selectedMember, setSelectedMember]         = useState<Member | null>(null);
+
+  // Unique orgs in sorted order
+  const orgs = [...new Map(
+    roster.map(r => [r.org_unit_id, r.org_unit_name])
+  ).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+
+  // Positions for selected org, vacant first
+  const positions = selectedOrgId
+    ? [...roster.filter(r => r.org_unit_id === selectedOrgId)]
+        .sort((a, b) => {
+          const av = a.calling_id === null ? 0 : 1;
+          const bv = b.calling_id === null ? 0 : 1;
+          return av !== bv ? av - bv : a.sort_order - b.sort_order;
+        })
+    : [];
+
+  function submit() {
+    if (!selectedPositionId) return;
+    createCalling.mutate(
+      {
+        position_id: selectedPositionId,
+        ...(selectedMember ? { member_id: selectedMember.id } : {}),
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ['callings'] });
+          onClose();
+        },
+      },
+    );
+  }
+
+  const selectCls = 'w-full text-sm px-3 py-2 rounded-lg border border-border bg-background outline-none focus:ring-2 focus:ring-primary/30';
+
+  return (
+    <div className="mx-4 mb-3 p-4 bg-card border border-primary/30 rounded-xl space-y-3">
+      <p className="text-xs font-semibold text-foreground">Add to Calling Pipeline — Proposed</p>
+
+      {/* Member */}
+      <div className="space-y-1">
+        <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Member</label>
+        <MemberCombobox value={selectedMember} onChange={setSelectedMember} />
+        {selectedMember && (
+          <button onClick={() => setSelectedMember(null)} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Organization */}
+      <div className="space-y-1">
+        <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Organization</label>
+        <select
+          value={selectedOrgId}
+          onChange={e => { setSelectedOrgId(e.target.value); setSelectedPositionId(''); }}
+          className={selectCls}
+        >
+          <option value="">Select organization…</option>
+          {orgs.map(([id, name]) => (
+            <option key={id} value={id}>{name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Position */}
+      {selectedOrgId && (
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Calling / Position</label>
+          <select
+            value={selectedPositionId}
+            onChange={e => setSelectedPositionId(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">Select position…</option>
+            {positions.map(p => (
+              <option key={p.position_id} value={p.position_id}>
+                {p.position_name}{p.calling_id === null ? ' (Vacant)' : ' (Filled)'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={submit}
+          disabled={!selectedPositionId || createCalling.isPending}
+          className="flex-1 text-xs font-semibold px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        >
+          {createCalling.isPending ? 'Adding…' : 'Add to Proposed'}
+        </button>
+        <button
+          onClick={onClose}
+          className="text-xs px-3 py-2 rounded-lg border border-border hover:bg-muted/60 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+
+      {createCalling.isError && (
+        <p className="text-xs text-destructive">{(createCalling.error as Error)?.message}</p>
+      )}
+    </div>
+  );
+}
+
 // ── PipelineView ──────────────────────────────────────────────────────────
 
 export function PipelineView() {
@@ -177,6 +294,7 @@ export function PipelineView() {
   });
 
   const { openPanel } = useUiStore();
+  const [showAddForm, setShowAddForm] = useState(false);
 
   if (isLoading) {
     return (
@@ -232,14 +350,33 @@ export function PipelineView() {
 
   return (
     <div className="pb-8">
-      {/* Summary line */}
-      <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+      {/* Summary line + Add button */}
+      <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
           {totalInFlight} calling{totalInFlight !== 1 ? 's' : ''} in progress
           {' · '}
           {byStatus['set_apart'].length} currently serving
         </span>
+        <button
+          onClick={() => setShowAddForm(v => !v)}
+          className={cn(
+            'text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors',
+            showAddForm
+              ? 'bg-muted border-border text-muted-foreground'
+              : 'bg-primary text-primary-foreground border-primary hover:bg-primary/90',
+          )}
+        >
+          {showAddForm ? 'Cancel' : '+ Add Calling'}
+        </button>
       </div>
+
+      {/* Add Calling Form */}
+      {showAddForm && (
+        <AddCallingForm
+          roster={roster ?? []}
+          onClose={() => setShowAddForm(false)}
+        />
+      )}
 
       {/* Kanban board — horizontally scrollable */}
       <div className="overflow-x-auto px-4 pb-4">
