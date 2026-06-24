@@ -72,15 +72,6 @@ function orgLabel(orgId: string): string {
   return MAP[orgId] ?? orgId;
 }
 
-function firstName(name: string): string {
-  return name.split(' ')[0];
-}
-
-function lastName(name: string): string {
-  const parts = name.split(' ');
-  return parts.length > 1 ? parts[parts.length - 1] : name;
-}
-
 // ── Card ──────────────────────────────────────────────────────────────────
 
 interface CardProps {
@@ -106,8 +97,7 @@ function PipelineCard({ entry, isTerminal, onOpen }: CardProps) {
       )}
     >
       <p className="text-sm font-semibold text-foreground leading-tight truncate">
-        {lastName(entry.member_name!)}
-        <span className="font-normal text-muted-foreground">, {firstName(entry.member_name!)}</span>
+        {entry.member_name}
       </p>
       <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
         {entry.position_name}

@@ -474,7 +474,7 @@ function WeekAsideItem({
 
   const assignedNames = week.speakers
     .filter(s => s.name)
-    .map(s => s.name!.split(' ').at(-1))  // last names only to save space
+    .map(s => s.name!)
     .join(', ');
 
   const primaryTopic = week.speakers.find(s => s.topic)?.topic ?? null;
