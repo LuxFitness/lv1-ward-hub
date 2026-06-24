@@ -39,3 +39,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Sensitive data exports and seed files (contain PII — real member names)
+exports/
+backend/src/seed.ts

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -181,16 +181,66 @@ function ActionRow({
   number,
   onStatusCycle,
   onDelete,
+  onUpdate,
   dim,
 }: {
   item: ActionItem;
   number: string;
   onStatusCycle: () => void;
   onDelete: () => void;
+  onUpdate: (updates: Partial<ActionItem>) => void;
   dim?: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState({ title: item.title, owner: item.owner ?? '', due_date: item.due_date ?? '' });
+
+  // Keep draft in sync when item changes externally
+  useEffect(() => {
+    if (!editing) setDraft({ title: item.title, owner: item.owner ?? '', due_date: item.due_date ?? '' });
+  }, [item.title, item.owner, item.due_date, editing]);
+
+  const save = useCallback(() => {
+    if (draft.title.trim()) {
+      onUpdate({ title: draft.title.trim(), owner: draft.owner.trim() || null, due_date: draft.due_date || null });
+    }
+    setEditing(false);
+  }, [draft, onUpdate]);
+
   const status = effectiveStatus(item);
   const due    = formatDue(item.due_date);
+
+  if (editing) {
+    return (
+      <div className="py-2.5 border-b border-border/50 last:border-0 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-muted-foreground shrink-0 w-10">{number}</span>
+          <input
+            autoFocus
+            value={draft.title}
+            onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+            className="flex-1 text-sm bg-background border border-primary/40 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="flex gap-2 pl-12">
+          <input
+            value={draft.owner}
+            placeholder="Owner"
+            onChange={e => setDraft(d => ({ ...d, owner: e.target.value }))}
+            className="flex-1 text-xs bg-background border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+          />
+          <input
+            type="date"
+            value={draft.due_date}
+            onChange={e => setDraft(d => ({ ...d, due_date: e.target.value }))}
+            className="text-xs bg-background border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button onClick={save} className="text-xs font-semibold px-2 py-1 bg-primary text-primary-foreground rounded">Save</button>
+          <button onClick={() => setEditing(false)} className="text-xs text-muted-foreground px-1">✕</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(
@@ -207,46 +257,50 @@ function ActionRow({
       {/* Number */}
       <span className="text-[10px] font-mono text-muted-foreground shrink-0 mt-0.5 w-10">{number}</span>
 
-      {/* Title + meta */}
-      <div className="flex-1 min-w-0">
+      {/* Title + meta — click title to edit */}
+      <div className="flex-1 min-w-0 cursor-text" onClick={() => setEditing(true)}>
         <p className={cn('text-sm text-foreground leading-snug', status === 'closed' && 'line-through text-muted-foreground')}>
           {item.title}
         </p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          {item.owner && (
-            <span className="text-[10px] text-muted-foreground">{item.owner}</span>
-          )}
-          {due && status !== 'closed' && (
-            <span className={cn('text-[10px]', due.cls)}>{due.label}</span>
-          )}
+          {item.owner && <span className="text-[10px] text-muted-foreground">{item.owner}</span>}
+          {due && status !== 'closed' && <span className={cn('text-[10px]', due.cls)}>{due.label}</span>}
         </div>
       </div>
 
       {/* Status badge */}
-      <span className={cn(
-        'text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 cursor-pointer select-none',
-        STATUS_STYLE[status],
-      )} onClick={onStatusCycle}>
+      <span
+        onClick={onStatusCycle}
+        className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 cursor-pointer select-none', STATUS_STYLE[status])}
+      >
         {STATUS_LABEL[status]}
       </span>
 
-      {/* Delete */}
-      <button
-        onClick={onDelete}
-        className="opacity-0 group-hover:opacity-40 hover:opacity-100 text-destructive text-xs shrink-0 mt-0.5 transition-opacity"
-      >✕</button>
+      {/* Edit + Delete */}
+      <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-40 hover:opacity-80 text-muted-foreground text-xs shrink-0 mt-0.5 transition-opacity" title="Edit">✎</button>
+      <button onClick={onDelete} className="opacity-0 group-hover:opacity-40 hover:opacity-100 text-destructive text-xs shrink-0 mt-0.5 transition-opacity">✕</button>
     </div>
   );
 }
 
 // ── Standing agenda item ──────────────────────────────────────────────────────
 
-function StandingRow({ title, item, onToggle }: {
+function StandingRow({ title, item, onToggle, onRename }: {
   title: string;
   item?: AgendaItem;
   onToggle: (status: AgendaItem['status']) => void;
+  onRename?: (newTitle: string) => void;
 }) {
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draft, setDraft] = useState('');
   const discussed = item?.status === 'discussed' || item?.status === 'resolved';
+  const displayTitle = item?.title ?? title;
+
+  function commitTitle() {
+    if (draft.trim() && draft.trim() !== displayTitle && onRename) onRename(draft.trim());
+    setEditingTitle(false);
+  }
+
   return (
     <div className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0 group">
       <button
@@ -258,9 +312,24 @@ function StandingRow({ title, item, onToggle }: {
       >
         {discussed && <span className="text-primary-foreground text-[9px] font-bold leading-none">✓</span>}
       </button>
-      <span className={cn('text-sm flex-1', discussed ? 'text-muted-foreground line-through' : 'text-foreground')}>
-        {title}
-      </span>
+
+      {editingTitle ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={e => { if (e.key === 'Enter') commitTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+          className="flex-1 text-sm bg-background border border-primary/40 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-primary"
+        />
+      ) : (
+        <span
+          onClick={() => { setDraft(displayTitle); setEditingTitle(true); }}
+          className={cn('text-sm flex-1 cursor-text', discussed ? 'text-muted-foreground line-through' : 'text-foreground')}
+        >
+          {displayTitle}
+        </span>
+      )}
     </div>
   );
 }
@@ -450,6 +519,10 @@ function OACPanel({
               title={title}
               item={agendaByOrder[idx]}
               onToggle={status => handleStandingToggle(idx, status)}
+              onRename={newTitle => {
+                const existing = agendaByOrder[idx];
+                if (existing) patchItem.mutate({ itemId: existing.id, updates: { title: newTitle } });
+              }}
             />
           ))}
         </div>
@@ -474,6 +547,7 @@ function OACPanel({
                 number={aiNumberMap.get(item.id) ?? ''}
                 onStatusCycle={() => cycleStatus(item)}
                 onDelete={() => deleteAction.mutate(item.id)}
+                onUpdate={updates => patchAction.mutate({ actionId: item.id, updates })}
               />
             ))}
           </div>
@@ -494,6 +568,7 @@ function OACPanel({
               number={aiNumberMap.get(item.id) ?? ''}
               onStatusCycle={() => cycleStatus(item)}
               onDelete={() => deleteAction.mutate(item.id)}
+              onUpdate={updates => patchAction.mutate({ actionId: item.id, updates })}
               dim={effectiveStatus(item) === 'closed'}
             />
           ))}
@@ -593,6 +668,7 @@ function PastMeetingRow({
                   number={aiNumberMap.get(item.id) ?? ''}
                   onStatusCycle={() => cycleStatus(item)}
                   onDelete={() => deleteAction.mutate(item.id)}
+                  onUpdate={updates => patchAction.mutate({ actionId: item.id, updates })}
                   dim={!isOpen(item)}
                 />
               ))}

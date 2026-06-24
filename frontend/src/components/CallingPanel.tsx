@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useUiStore } from '@/store/uiStore';
 import { useTransitionCalling, useCreateCalling } from '@/hooks/useCallings';
+import { MemberCombobox } from '@/components/MemberCombobox';
 import {
   Sheet,
   SheetContent,
@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
 import type { CallingDetail, CallingStatus, Member } from '@/types';
 
 // Valid next transitions per state — mirrors backend state machine (client-side UX only)
@@ -211,97 +211,6 @@ function CallingDetail({ callingId, onClose }: CallingDetailProps) {
         </div>
       )}
     </div>
-  );
-}
-
-// ── Inline member combobox ─────────────────────────────────────────────────
-
-function MemberCombobox({
-  value,
-  onChange,
-}: {
-  value: Member | null;
-  onChange: (m: Member | null) => void;
-}) {
-  const [open, setOpen]   = useState(false);
-  const [query, setQuery] = useState('');
-  const inputRef          = useRef<HTMLInputElement>(null);
-  const dropdownRef       = useRef<HTMLDivElement>(null);
-  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
-
-  const { data: members = [] } = useQuery({
-    queryKey: ['members'],
-    queryFn: () => apiFetch<Member[]>('/api/members'),
-  });
-
-  // Show all on open, filter as user types
-  const filtered = open
-    ? members.filter(m => !query || m.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
-    : [];
-
-  // Fixed-position dropdown to escape any overflow clipping
-  useEffect(() => {
-    if (open && inputRef.current) {
-      const r = inputRef.current.getBoundingClientRect();
-      setDropPos({ top: r.bottom + 2, left: r.left, width: r.width });
-    }
-  }, [open]);
-
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      const inInput = inputRef.current?.contains(e.target as Node);
-      const inDrop  = dropdownRef.current?.contains(e.target as Node);
-      if (!inInput && !inDrop) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  return (
-    <>
-      {!open ? (
-        <button
-          onClick={() => { setQuery(''); setOpen(true); }}
-          className={cn(
-            'w-full text-left text-sm px-3 py-2 rounded-lg border border-border bg-background',
-            'hover:bg-muted/40 transition-colors',
-            value ? 'text-foreground' : 'text-muted-foreground italic',
-          )}
-        >
-          {value?.name ?? 'Search for a member…'}
-        </button>
-      ) : (
-        <input
-          ref={inputRef}
-          autoFocus
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search members…"
-          onKeyDown={e => {
-            if (e.key === 'Escape') { setOpen(false); setQuery(''); }
-            if (e.key === 'Enter' && filtered[0]) { onChange(filtered[0]); setOpen(false); setQuery(''); }
-          }}
-          className="w-full text-sm px-3 py-2 rounded-lg border border-primary/40 bg-primary/5 outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      )}
-      {open && filtered.length > 0 && dropPos && (
-        <div
-          ref={dropdownRef}
-          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
-          className="bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto"
-        >
-          {filtered.map(m => (
-            <button
-              key={m.id}
-              onMouseDown={() => { onChange(m); setOpen(false); setQuery(''); }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
-            >
-              {m.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </>
   );
 }
 
