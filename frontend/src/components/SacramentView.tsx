@@ -380,10 +380,8 @@ function WeekAsideItem({
   return (
     <div
       className={cn(
-        'w-full border-b border-border transition-colors',
-        isActive
-          ? 'bg-primary/8 border-l-2 border-l-primary'
-          : 'hover:bg-muted/60 border-l-2 border-l-transparent',
+        'w-full border-b border-border',
+        isActive ? 'bg-primary/8 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent',
         isPast && 'opacity-50',
       )}
     >
@@ -408,34 +406,25 @@ function WeekAsideItem({
         </span>
       </div>
 
-      {/* Speaker rows — editable when active */}
-      <div className="px-4 pb-3.5 space-y-1.5">
+      {/* Speaker rows — always editable */}
+      <div className="px-4 pb-3.5 space-y-2">
         {week.speakers.map((s, i) => (
           <div key={i} className="min-w-0">
             <span className="text-[10px] text-muted-foreground block mb-0.5">{s.slot}</span>
-            {isActive ? (
-              <div className="space-y-0.5">
-                <EditableText
-                  value={s.name}
-                  onChange={v => updateSpeaker(i, 'name', v)}
-                  placeholder="Speaker name"
-                  emptyLabel="Not assigned"
-                  className={cn('text-[11px]', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
-                />
-                <EditableText
-                  value={s.topic}
-                  onChange={v => updateSpeaker(i, 'topic', v)}
-                  placeholder="Topic"
-                  emptyLabel="No topic"
-                  className="text-[10px] text-muted-foreground"
-                />
-              </div>
-            ) : (
-              <span className={cn('text-[11px] truncate block', s.name ? 'text-foreground font-medium' : 'text-muted-foreground italic')}>
-                {s.name ?? 'TBD'}
-                {s.topic && <span className="text-muted-foreground font-normal"> · {s.topic}</span>}
-              </span>
-            )}
+            <EditableText
+              value={s.name}
+              onChange={v => updateSpeaker(i, 'name', v)}
+              placeholder="Speaker name"
+              emptyLabel="Not assigned"
+              className={cn('text-[11px]', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
+            />
+            <EditableText
+              value={s.topic}
+              onChange={v => updateSpeaker(i, 'topic', v)}
+              placeholder="Topic"
+              emptyLabel="No topic"
+              className="text-[10px] text-muted-foreground"
+            />
           </div>
         ))}
       </div>
