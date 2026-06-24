@@ -339,7 +339,7 @@ function StandingRow({ title, item, onToggle, onRename }: {
 function NotesField({ value, onSave }: { value: string | null | undefined; onSave: (v: string) => void }) {
   const [draft, setDraft]   = useState(value ?? '');
   const [dirty, setDirty]   = useState(false);
-  const timerRef            = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef            = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => { setDraft(value ?? ''); }, [value]);
 
@@ -588,12 +588,10 @@ function OACPanel({
 
 function PastMeetingRow({
   meeting,
-  allMeetings,
   meetingType,
   aiNumberMap,
 }: {
   meeting: MeetingAgenda;
-  allMeetings: MeetingAgenda[];
   meetingType: MeetingType;
   aiNumberMap: Map<string, string>;
 }) {
@@ -808,7 +806,6 @@ export function MeetingsView() {
                 <PastMeetingRow
                   key={m.id}
                   meeting={m}
-                  allMeetings={meetings}
                   meetingType={activeType}
                   aiNumberMap={aiNumberMap}
                 />

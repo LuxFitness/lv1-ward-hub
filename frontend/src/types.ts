@@ -40,12 +40,12 @@ export interface RosterEntry {
   position_id: string;
   position_name: string;
   org_unit_id: string;
-  org_unit_name: string;
+  org_unit_name?: string;
   sort_order: number;
   calling_id: string | null;
   member_id: string | null;
   member_name: string | null;
-  previous_member_name: string | null;
+  previous_member_name?: string | null;
   status: CallingStatus | null;
   state_entered_at: string | null;
 }
