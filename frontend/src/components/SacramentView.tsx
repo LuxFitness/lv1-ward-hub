@@ -104,10 +104,13 @@ function MemberSearchField({
 }: MemberSearchFieldProps) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState('');
-  const containerRef      = useRef<HTMLDivElement>(null);
+  const inputRef          = useRef<HTMLInputElement>(null);
+  const dropdownRef       = useRef<HTMLDivElement>(null);
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const filtered = query.length >= 1
-    ? members.filter(n => n.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
+  // Show all on open, filter as user types
+  const filtered = open
+    ? members.filter(n => !query || n.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
     : [];
 
   function commit(name: string | null) {
@@ -116,11 +119,19 @@ function MemberSearchField({
     setQuery('');
   }
 
+  // Position dropdown using fixed coords to escape any overflow containers
+  useEffect(() => {
+    if (open && inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 2, left: r.left, width: r.width });
+    }
+  }, [open]);
+
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        commit(query || value);
-      }
+      const inInput = inputRef.current?.contains(e.target as Node);
+      const inDrop  = dropdownRef.current?.contains(e.target as Node);
+      if (!inInput && !inDrop) commit(query || value);
     }
     if (open) document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -129,7 +140,7 @@ function MemberSearchField({
   if (!open) {
     return (
       <button
-        onClick={() => { setQuery(value ?? ''); setOpen(true); }}
+        onClick={() => { setQuery(''); setOpen(true); }}
         className={cn('text-left w-full rounded px-1 -mx-1 transition-colors cursor-text group hover:bg-muted/60', className)}
       >
         <span className={cn(!value && 'text-muted-foreground italic text-xs')}>{value ?? emptyLabel}</span>
@@ -139,23 +150,25 @@ function MemberSearchField({
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       <input
+        ref={inputRef}
         autoFocus
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder={placeholder}
         onKeyDown={e => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(filtered[0] ?? query); }
+          if (e.key === 'Enter') { e.preventDefault(); commit(filtered[0] ?? (query || value)); }
           if (e.key === 'Escape') { setOpen(false); setQuery(''); }
-          if (e.key === 'ArrowDown' && filtered.length) {
-            (containerRef.current?.querySelector('[data-item]') as HTMLElement)?.focus();
-          }
         }}
         className="bg-primary/5 border border-primary/40 rounded px-2 py-0.5 text-sm outline-none focus:ring-1 focus:ring-primary w-full"
       />
-      {filtered.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+      {filtered.length > 0 && dropPos && typeof document !== 'undefined' && (
+        <div
+          ref={dropdownRef}
+          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+          className="bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto"
+        >
           {filtered.map((name, i) => (
             <button
               key={name}
@@ -168,7 +181,7 @@ function MemberSearchField({
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
