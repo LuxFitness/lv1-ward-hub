@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { SacramentWeek, SpeakerSlot } from '@/lib/mockData';
+import type { Member } from '@/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,90 @@ function EditableText({
   );
 }
 
+// ── MemberSearchField — autocomplete from ward member list ────────────────────
+
+interface MemberSearchFieldProps {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  members: string[];
+  placeholder?: string;
+  emptyLabel?: string;
+  className?: string;
+}
+
+function MemberSearchField({
+  value, onChange, members, placeholder = 'Search members…', emptyLabel = 'Click to set', className,
+}: MemberSearchFieldProps) {
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef      = useRef<HTMLDivElement>(null);
+
+  const filtered = query.length >= 1
+    ? members.filter(n => n.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
+    : [];
+
+  function commit(name: string | null) {
+    onChange(name?.trim() || null);
+    setOpen(false);
+    setQuery('');
+  }
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        commit(query || value);
+      }
+    }
+    if (open) document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open, query, value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => { setQuery(value ?? ''); setOpen(true); }}
+        className={cn('text-left w-full rounded px-1 -mx-1 transition-colors cursor-text group hover:bg-muted/60', className)}
+      >
+        <span className={cn(!value && 'text-muted-foreground italic text-xs')}>{value ?? emptyLabel}</span>
+        <span className="opacity-0 group-hover:opacity-30 ml-1 text-[9px] select-none"> ✎</span>
+      </button>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        autoFocus
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder={placeholder}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(filtered[0] ?? query); }
+          if (e.key === 'Escape') { setOpen(false); setQuery(''); }
+          if (e.key === 'ArrowDown' && filtered.length) {
+            (containerRef.current?.querySelector('[data-item]') as HTMLElement)?.focus();
+          }
+        }}
+        className="bg-primary/5 border border-primary/40 rounded px-2 py-0.5 text-sm outline-none focus:ring-1 focus:ring-primary w-full"
+      />
+      {filtered.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map((name, i) => (
+            <button
+              key={name}
+              data-item={i}
+              onMouseDown={() => commit(name)}
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted/60 transition-colors"
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── TagEditor — editable list of string tags ───────────────────────────────────
 
 function TagEditor({ items, onChange }: { items: string[]; onChange: (v: string[]) => void }) {
@@ -154,9 +239,10 @@ interface WeekCardProps {
   week: SacramentWeek;
   onUpdate: (updates: Partial<SacramentWeek>) => void;
   isSaving?: boolean;
+  members: string[];
 }
 
-function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
+function WeekCard({ week, onUpdate, isSaving, members }: WeekCardProps) {
   const days    = daysUntil(week.date);
   const isPast  = days < -1;
   const isSoon  = days >= 0 && days <= 7;
@@ -220,20 +306,20 @@ function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
         <div className="grid grid-cols-2 gap-4 py-3">
           <div>
             <RowLabel>Presiding</RowLabel>
-            <EditableText
+            <MemberSearchField
               value={week.presiding}
               onChange={v => onUpdate({ presiding: v })}
-              placeholder="Name"
+              members={members}
               emptyLabel="Click to set"
               className="text-sm text-foreground"
             />
           </div>
           <div>
             <RowLabel>Conducting</RowLabel>
-            <EditableText
+            <MemberSearchField
               value={week.conducting}
               onChange={v => onUpdate({ conducting: v })}
-              placeholder="Name"
+              members={members}
               emptyLabel="Click to set"
               className="text-sm text-foreground"
             />
@@ -244,20 +330,20 @@ function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
         <div className="grid grid-cols-2 gap-4 py-3">
           <div>
             <RowLabel>Opening Prayer</RowLabel>
-            <EditableText
+            <MemberSearchField
               value={week.opening_prayer}
               onChange={v => onUpdate({ opening_prayer: v })}
-              placeholder="Name"
+              members={members}
               emptyLabel="Click to set"
               className="text-sm text-foreground"
             />
           </div>
           <div>
             <RowLabel>Closing Prayer</RowLabel>
-            <EditableText
+            <MemberSearchField
               value={week.closing_prayer}
               onChange={v => onUpdate({ closing_prayer: v })}
-              placeholder="Name"
+              members={members}
               emptyLabel="Click to set"
               className="text-sm text-foreground"
             />
@@ -271,10 +357,10 @@ function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
             {week.speakers.map((s, i) => (
               <div key={i} className="grid grid-cols-[5rem_1fr_1fr] gap-2 items-baseline">
                 <span className="text-[10px] text-muted-foreground">{s.slot}</span>
-                <EditableText
+                <MemberSearchField
                   value={s.name}
                   onChange={v => updateSpeaker(i, 'name', v)}
-                  placeholder="Speaker name"
+                  members={members}
                   emptyLabel="Not assigned"
                   className={cn('text-sm', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
                 />
@@ -314,20 +400,20 @@ function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
         <div className="grid grid-cols-2 gap-4 py-3">
           <div>
             <RowLabel>Chorister</RowLabel>
-            <EditableText
+            <MemberSearchField
               value={week.chorister}
               onChange={v => onUpdate({ chorister: v })}
-              placeholder="Name"
+              members={members}
               emptyLabel="Click to set"
               className="text-sm text-foreground"
             />
           </div>
           <div>
             <RowLabel>Organist</RowLabel>
-            <EditableText
+            <MemberSearchField
               value={week.organist}
               onChange={v => onUpdate({ organist: v })}
-              placeholder="Name"
+              members={members}
               emptyLabel="Click to set"
               className="text-sm text-foreground"
             />
@@ -359,12 +445,13 @@ function WeekCard({ week, onUpdate, isSaving }: WeekCardProps) {
 // ── Aside week item ────────────────────────────────────────────────────────────
 
 function WeekAsideItem({
-  week, isActive, onClick, onUpdate,
+  week, isActive, onClick, onUpdate, members,
 }: {
   week: SacramentWeek;
   isActive: boolean;
   onClick: () => void;
   onUpdate: (updates: Partial<SacramentWeek>) => void;
+  members: string[];
 }) {
   const days   = daysUntil(week.date);
   const isPast = days < -1;
@@ -411,10 +498,11 @@ function WeekAsideItem({
         {week.speakers.map((s, i) => (
           <div key={i} className="min-w-0">
             <span className="text-[10px] text-muted-foreground block mb-0.5">{s.slot}</span>
-            <EditableText
+            <MemberSearchField
               value={s.name}
               onChange={v => updateSpeaker(i, 'name', v)}
-              placeholder="Speaker name"
+              members={members}
+              placeholder="Search members…"
               emptyLabel="Not assigned"
               className={cn('text-[11px]', s.name ? 'text-foreground font-medium' : 'text-amber-600')}
             />
@@ -443,6 +531,12 @@ export function SacramentView() {
     queryKey: ['sacrament'],
     queryFn: () => apiFetch<SacramentWeek[]>('/api/sacrament'),
   });
+
+  const { data: membersData } = useQuery({
+    queryKey: ['members'],
+    queryFn: () => apiFetch<Member[]>('/api/members'),
+  });
+  const memberNames = (membersData ?? []).map(m => m.name);
 
   const [activeId,    setActiveId]    = useState<string | null>(null);
   const [savingId,    setSavingId]    = useState<string | null>(null);
@@ -573,6 +667,7 @@ export function SacramentView() {
             isActive={activeId === week.id}
             onClick={() => scrollToWeek(week.id)}
             onUpdate={updates => handleUpdate(week.id, updates)}
+            members={memberNames}
           />
         ))}
       </aside>
@@ -595,6 +690,7 @@ export function SacramentView() {
               week={week}
               onUpdate={updates => handleUpdate(week.id, updates)}
               isSaving={savingId === week.id}
+              members={memberNames}
             />
           ))}
 
@@ -607,6 +703,7 @@ export function SacramentView() {
                   week={week}
                   onUpdate={updates => handleUpdate(week.id, updates)}
                   isSaving={savingId === week.id}
+                  members={memberNames}
                 />
               ))}
             </>

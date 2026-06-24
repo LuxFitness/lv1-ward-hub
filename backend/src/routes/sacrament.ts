@@ -1,15 +1,27 @@
 /**
  * Sacrament meeting planner routes.
  *
- * Google Drive sync (POST /sync-sheets):
- *   Requires environment variables:
- *     GOOGLE_SERVICE_ACCOUNT_JSON  — full JSON string of service account key
- *     SACRAMENT_SHEET_ID           — spreadsheet ID from the Drive URL
- *     SACRAMENT_SHEET_TAB          — sheet tab name (default: "Sacrament Planner")
+ * Google Drive pull (POST /sync-sheets { direction: 'pull' }):
+ *   Downloads the Sacrament Meeting Planner XLSX from Google Drive and upserts
+ *   all upcoming weeks into sacrament_weeks.
  *
- *   Setup: Share your Google Sheet with the service account email address
- *   (found in the JSON key as "client_email") with Editor access.
- *   Enable Google Sheets API in your Google Cloud project.
+ *   Required env var:
+ *     GOOGLE_SERVICE_ACCOUNT_JSON  — full JSON string of a service account key
+ *                                    (needs Drive API readonly scope)
+ *   Optional env var:
+ *     SACRAMENT_SHEET_ID           — override the known file ID
+ *
+ *   Setup:
+ *     1. Create a GCP project, enable the Google Drive API.
+ *     2. Create a service account and download the JSON key file.
+ *     3. Share the Sacrament Meeting Planner XLSX with the service account
+ *        email (client_email in the JSON) — Viewer access is enough.
+ *     4. Set GOOGLE_SERVICE_ACCOUNT_JSON=<contents of key file> in Render.
+ *
+ * Column mapping in the XLSX (0-indexed, data starts at row 2):
+ *  0:date  1:presiding  2:conducting  11:opening_prayer  12:closing_prayer
+ *  13:speaker1  14:speaker2  15:speaker3  16:chorister  17:organist
+ *  18:opening_hymn  19:sacrament_hymn  21:closing_hymn  22:approved
  */
 
 import { Router } from 'express';
@@ -17,7 +29,24 @@ import { supabase } from '../db';
 
 export const sacramentRouter = Router();
 
-// ── List weeks: upcoming (next 8) + last 4 ────────────────────────────────────
+// Known file ID for the Sacrament Meeting Planner XLSX
+const KNOWN_SHEET_ID = '1ac9Y2D8xj6PvXz4cR5Z-u98VWym0ROk-';
+
+function parseXlsxDate(raw: any): string | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+  if (typeof raw === 'string') {
+    const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      const yr = m[3].length === 2 ? '20' + m[3] : m[3];
+      return `${yr}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  }
+  return null;
+}
+
+// ── List weeks: upcoming (next ~6 months) + last 4 weeks ─────────────────────
 
 sacramentRouter.get('/', async (_req, res) => {
   const { data, error } = await supabase
@@ -25,7 +54,7 @@ sacramentRouter.get('/', async (_req, res) => {
     .select('*')
     .gte('date', new Date(Date.now() - 28 * 86400_000).toISOString().slice(0, 10))
     .order('date', { ascending: true })
-    .limit(12);
+    .limit(40);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data ?? []);
@@ -88,109 +117,103 @@ sacramentRouter.patch('/:id', async (req, res) => {
   res.json(data);
 });
 
-// ── Google Sheets sync ────────────────────────────────────────────────────────
-//
-// POST /api/sacrament/sync-sheets { direction: 'pull' | 'push' }
-//
-// 'pull' — import from the Google Sheet into the DB (Drive is source of truth)
-// 'push' — write upcoming weeks from DB back to the Google Sheet
+// ── Google Drive XLSX pull ────────────────────────────────────────────────────
 
 sacramentRouter.post('/sync-sheets', async (req, res) => {
-  const SHEET_ID = process.env.SACRAMENT_SHEET_ID;
-  const SA_JSON  = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  const FILE_ID = process.env.SACRAMENT_SHEET_ID ?? KNOWN_SHEET_ID;
+  const SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
-  if (!SHEET_ID || !SA_JSON) {
+  if (!SA_JSON) {
     return res.status(501).json({
       error: 'Google Drive sync is not configured',
-      setup: 'Set SACRAMENT_SHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON in backend/.env. ' +
-             'Share the sheet with the service account client_email (Editor access). ' +
-             'Enable Google Sheets API in your Google Cloud project.',
+      setup: [
+        '1. Create a GCP project and enable the Drive API.',
+        '2. Create a service account and download the JSON key file.',
+        `3. Share file ID "${FILE_ID}" with the service account email (Viewer access).`,
+        '4. Set GOOGLE_SERVICE_ACCOUNT_JSON=<key file contents> in Render environment variables.',
+      ].join(' '),
     });
   }
 
   const { direction = 'pull' } = req.body as { direction?: 'pull' | 'push' };
+  if (direction !== 'pull') {
+    return res.status(400).json({ error: 'Only pull is supported; edit the XLSX directly for changes.' });
+  }
 
   try {
     const { google } = await import('googleapis');
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(SA_JSON),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const tab = process.env.SACRAMENT_SHEET_TAB ?? 'Sacrament Planner';
+    const drive = google.drive({ version: 'v3', auth });
 
-    if (direction === 'pull') {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: `${tab}!A2:Z100`,
-      });
+    const fileRes = await drive.files.get(
+      { fileId: FILE_ID, alt: 'media' },
+      { responseType: 'arraybuffer' }
+    );
 
-      const rows = response.data.values ?? [];
-      const upserts = rows
-        .filter((r: string[]) => r[0]) // skip empty rows
-        .map((r: string[], i: number) => ({
-          date: r[0],               // col A: date (YYYY-MM-DD or M/D/YYYY)
-          presiding:  r[1] ?? null, // col B
-          conducting: r[2] ?? null, // col C
-          speakers: [
-            { slot: 'Opening',  name: r[3] || null, topic: r[4] || null },
-            { slot: 'Main',     name: r[5] || null, topic: r[6] || null },
-            { slot: 'Closing',  name: r[7] || null, topic: r[8] || null },
-          ],
-          opening_hymn:   r[9]  || null,
-          sacrament_hymn: r[10] || null,
-          closing_hymn:   r[11] || null,
-          chorister: r[12] || null,
-          organist:  r[13] || null,
-          approved:  r[14]?.toLowerCase() === 'yes' || r[14] === '✓' || false,
-          google_sheet_row: i + 2,
-        }));
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(Buffer.from(fileRes.data as ArrayBuffer), { type: 'buffer', cellDates: true });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-      for (const row of upserts) {
-        await supabase.from('sacrament_weeks').upsert(row, { onConflict: 'date' });
+    const today = new Date().toISOString().slice(0, 10);
+    const SPECIAL_KEYWORDS = [
+      'fast & testimony', 'ym camp', 'yw camp', 'stake conference',
+      'general conference', 'primary presentation', 'christmas program', 'sand hollow',
+    ];
+
+    const upserts: any[] = [];
+    for (let i = 2; i < rows.length; i++) {
+      const r = rows[i];
+      const date = parseXlsxDate(r[0]);
+      if (!date || date < today) continue;
+
+      const s1 = (r[13] ?? '').toString().trim();
+      const s2 = (r[14] ?? '').toString().trim();
+      const s3 = (r[15] ?? '').toString().trim();
+
+      const isSpecial = SPECIAL_KEYWORDS.some(k => s1.toLowerCase().includes(k));
+      const speakers = isSpecial
+        ? [{ slot: s1, name: null, topic: null }]
+        : [
+            s1 ? { slot: 'Youth', name: s1, topic: null } : null,
+            s2 ? { slot: 'Speaker 1', name: s2, topic: null } : null,
+            s3 ? { slot: 'Speaker 2', name: s3, topic: null } : null,
+          ].filter(Boolean);
+
+      if (speakers.length === 0) {
+        speakers.push(
+          { slot: 'Youth', name: null, topic: null },
+          { slot: 'Speaker 1', name: null, topic: null },
+          { slot: 'Speaker 2', name: null, topic: null }
+        );
       }
 
-      return res.json({ ok: true, direction, synced: upserts.length });
-    }
-
-    if (direction === 'push') {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: weeks } = await supabase
-        .from('sacrament_weeks')
-        .select('*')
-        .gte('date', today)
-        .order('date')
-        .limit(8);
-
-      const values = (weeks ?? []).map((w: any) => [
-        w.date,
-        w.presiding ?? '',
-        w.conducting ?? '',
-        w.speakers?.[0]?.name ?? '',
-        w.speakers?.[0]?.topic ?? '',
-        w.speakers?.[1]?.name ?? '',
-        w.speakers?.[1]?.topic ?? '',
-        w.speakers?.[2]?.name ?? '',
-        w.speakers?.[2]?.topic ?? '',
-        w.opening_hymn ?? '',
-        w.sacrament_hymn ?? '',
-        w.closing_hymn ?? '',
-        w.chorister ?? '',
-        w.organist ?? '',
-        w.approved ? '✓' : '',
-      ]);
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${tab}!A2`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values },
+      upserts.push({
+        date,
+        presiding:      (r[1]  ?? '').toString().trim() || null,
+        conducting:     (r[2]  ?? '').toString().trim() || null,
+        opening_prayer: (r[11] ?? '').toString().trim() || null,
+        closing_prayer: (r[12] ?? '').toString().trim() || null,
+        speakers,
+        chorister:      (r[16] ?? '').toString().trim() || null,
+        organist:       (r[17] ?? '').toString().trim() || null,
+        opening_hymn:   (r[18] ?? '').toString().trim() || null,
+        sacrament_hymn: (r[19] ?? '').toString().trim() || null,
+        closing_hymn:   (r[21] ?? '').toString().trim() || null,
+        approved: ['approved', 'yes', '✓'].includes(
+          (r[22] ?? '').toString().toLowerCase().trim()
+        ),
       });
-
-      return res.json({ ok: true, direction, pushed: values.length });
     }
 
-    res.status(400).json({ error: 'direction must be pull or push' });
+    for (const row of upserts) {
+      await supabase.from('sacrament_weeks').upsert(row, { onConflict: 'date' });
+    }
+
+    return res.json({ ok: true, direction, synced: upserts.length });
   } catch (err: any) {
     res.status(500).json({ error: err.message ?? 'Sync failed' });
   }

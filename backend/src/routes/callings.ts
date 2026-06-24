@@ -31,6 +31,7 @@ callingsRouter.get('/', async (_req, res) => {
     .from('positions')
     .select(
       `id, name, sort_order, notes, org_unit_id,
+       org_units(name),
        callings!left(id, status, state_entered_at, member_id,
          members(name)
        )`
@@ -58,12 +59,13 @@ callingsRouter.get('/', async (_req, res) => {
       position_id: pos.id,
       position_name: pos.name,
       org_unit_id: pos.org_unit_id,
+      org_unit_name: (pos.org_units as any)?.name ?? pos.org_unit_id,
       sort_order: pos.sort_order,
       consideration_notes: pos.notes,
       calling_id: activeCalling?.id ?? null,
       member_id: activeCalling?.member_id ?? null,
       member_name: activeCalling?.members?.name ?? null,
-      calling_status: activeCalling?.status ?? null,
+      status: activeCalling?.status ?? null,
       state_entered_at: activeCalling?.state_entered_at ?? null,
     };
   });

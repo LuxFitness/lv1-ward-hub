@@ -111,7 +111,7 @@ function PipelineCard({ entry, isTerminal, onOpen }: CardProps) {
       </p>
       <div className="flex items-center justify-between mt-2">
         <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-          {orgLabel(entry.org_unit_id)}
+          {entry.org_unit_name ?? orgLabel(entry.org_unit_id)}
         </span>
         {days !== null && !isTerminal && (
           <span className={cn(

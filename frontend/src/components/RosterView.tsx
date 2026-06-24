@@ -173,7 +173,7 @@ export function RosterView() {
       {sortedOrgIds.map((orgId) => (
         <section key={orgId} className="py-2">
           <h2 className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            {getOrgDisplayName(orgId)}
+            {grouped[orgId][0]?.org_unit_name ?? getOrgDisplayName(orgId)}
           </h2>
           <div className="rounded-lg overflow-hidden border border-slate-200 mx-4">
             {grouped[orgId].map((row) => (

@@ -40,12 +40,25 @@ export interface RosterEntry {
   position_id: string;
   position_name: string;
   org_unit_id: string;
+  org_unit_name: string;
   sort_order: number;
   calling_id: string | null;
   member_id: string | null;
   member_name: string | null;
   status: CallingStatus | null;
   state_entered_at: string | null;
+}
+
+export interface CallingDetail {
+  id: string;
+  position_id: string;
+  member_id: string | null;
+  status: CallingStatus;
+  bishopric_owner: string | null;
+  notes: string | null;
+  state_entered_at: string;
+  members: { name: string } | null;
+  positions: { name: string; org_unit_id: string; org_units: { name: string } | null } | null;
 }
 
 export interface PendingCalling {

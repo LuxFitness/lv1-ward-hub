@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { useUiStore } from '@/store/uiStore';
@@ -11,7 +12,8 @@ import {
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { Calling, CallingStatus } from '@/types';
+import { cn } from '@/lib/utils';
+import type { CallingDetail, CallingStatus, Member } from '@/types';
 
 // Valid next transitions per state — mirrors backend state machine (client-side UX only)
 const VALID_TRANSITIONS: Record<CallingStatus, CallingStatus[]> = {
@@ -81,7 +83,7 @@ interface CallingDetailProps {
 function CallingDetail({ callingId, onClose }: CallingDetailProps) {
   const { data: calling, isLoading, error } = useQuery({
     queryKey: ['callings', 'detail', callingId],
-    queryFn: () => apiFetch<Calling>(`/api/callings/${callingId}`),
+    queryFn: () => apiFetch<CallingDetail>(`/api/callings/${callingId}`),
     enabled: true,
   });
 
@@ -135,13 +137,26 @@ function CallingDetail({ callingId, onClose }: CallingDetailProps) {
           Member
         </p>
         <p className="text-sm text-slate-700">
-          {calling.member_id ? (
-            <span>Member #{calling.member_id}</span>
+          {calling.members?.name ? (
+            <span>{calling.members.name}</span>
           ) : (
             <span className="italic text-slate-400">No member assigned</span>
           )}
         </p>
       </div>
+
+      {/* Position info */}
+      {calling.positions && (
+        <div className="space-y-1">
+          <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+            Position
+          </p>
+          <p className="text-sm text-slate-700">{calling.positions.name}</p>
+          {calling.positions.org_units?.name && (
+            <p className="text-xs text-slate-400">{calling.positions.org_units.name}</p>
+          )}
+        </div>
+      )}
 
       {/* Bishopric owner */}
       {calling.bishopric_owner && (
@@ -199,6 +214,81 @@ function CallingDetail({ callingId, onClose }: CallingDetailProps) {
   );
 }
 
+// ── Inline member combobox ─────────────────────────────────────────────────
+
+function MemberCombobox({
+  value,
+  onChange,
+}: {
+  value: Member | null;
+  onChange: (m: Member | null) => void;
+}) {
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
+  const ref               = useRef<HTMLDivElement>(null);
+
+  const { data: members = [] } = useQuery({
+    queryKey: ['members'],
+    queryFn: () => apiFetch<Member[]>('/api/members'),
+  });
+
+  const filtered = query.length >= 1
+    ? members.filter(m => m.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
+    : [];
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      {!open ? (
+        <button
+          onClick={() => { setQuery(''); setOpen(true); }}
+          className={cn(
+            'w-full text-left text-sm px-3 py-2 rounded-lg border border-border bg-background',
+            'hover:bg-muted/40 transition-colors',
+            value ? 'text-foreground' : 'text-muted-foreground italic',
+          )}
+        >
+          {value?.name ?? 'Search for a member…'}
+        </button>
+      ) : (
+        <>
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search members…"
+            onKeyDown={e => {
+              if (e.key === 'Escape') setOpen(false);
+              if (e.key === 'Enter' && filtered[0]) { onChange(filtered[0]); setOpen(false); setQuery(''); }
+            }}
+            className="w-full text-sm px-3 py-2 rounded-lg border border-primary/40 bg-primary/5 outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {filtered.length > 0 && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+              {filtered.map(m => (
+                <button
+                  key={m.id}
+                  onMouseDown={() => { onChange(m); setOpen(false); setQuery(''); }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 interface VacantPositionProps {
   positionId: string;
   onClose: () => void;
@@ -206,10 +296,14 @@ interface VacantPositionProps {
 
 function VacantPosition({ positionId, onClose }: VacantPositionProps) {
   const createCalling = useCreateCalling();
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
   function handleCreate() {
     createCalling.mutate(
-      { position_id: positionId },
+      {
+        position_id: positionId,
+        ...(selectedMember ? { member_id: selectedMember.id } : {}),
+      },
       { onSuccess: () => onClose() },
     );
   }
@@ -218,17 +312,30 @@ function VacantPosition({ positionId, onClose }: VacantPositionProps) {
     <div className="flex flex-col gap-4 p-4">
       <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
         <p className="text-sm text-slate-500">
-          This position is currently vacant. Start a new calling pipeline to
-          recommend someone.
+          This position is currently vacant. Search for the member you'd like to recommend.
         </p>
       </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Recommend</p>
+        <MemberCombobox value={selectedMember} onChange={setSelectedMember} />
+        {selectedMember && (
+          <button
+            onClick={() => setSelectedMember(null)}
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       <Button
         variant="default"
         className="w-full"
         disabled={createCalling.isPending}
         onClick={handleCreate}
       >
-        Start Calling Pipeline
+        {createCalling.isPending ? 'Starting…' : 'Start Calling Pipeline'}
       </Button>
     </div>
   );
