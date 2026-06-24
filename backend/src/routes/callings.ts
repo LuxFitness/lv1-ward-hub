@@ -54,6 +54,14 @@ callingsRouter.get('/', async (_req, res) => {
     const activeCalling = rawCallings.find(
       (c: any) => !TERMINAL.includes(c.status as CallingStatus)
     );
+    // For vacant positions, find the most recently released/released incumbent
+    const prevCalling = !activeCalling
+      ? rawCallings
+          .filter((c: any) => c.status === 'released')
+          .sort((a: any, b: any) =>
+            new Date(b.state_entered_at ?? 0).getTime() - new Date(a.state_entered_at ?? 0).getTime()
+          )[0] ?? null
+      : null;
 
     return {
       position_id: pos.id,
@@ -67,6 +75,7 @@ callingsRouter.get('/', async (_req, res) => {
       member_name: activeCalling?.members?.name ?? null,
       status: activeCalling?.status ?? null,
       state_entered_at: activeCalling?.state_entered_at ?? null,
+      previous_member_name: prevCalling?.members?.name ?? null,
     };
   });
 

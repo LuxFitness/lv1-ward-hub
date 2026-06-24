@@ -45,6 +45,7 @@ export interface RosterEntry {
   calling_id: string | null;
   member_id: string | null;
   member_name: string | null;
+  previous_member_name: string | null;
   status: CallingStatus | null;
   state_entered_at: string | null;
 }
