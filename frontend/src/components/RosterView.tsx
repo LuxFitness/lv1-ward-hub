@@ -129,7 +129,7 @@ export function RosterView() {
     ? roster.filter(r =>
         r.position_name.toLowerCase().includes(q) ||
         (r.member_name ?? '').toLowerCase().includes(q) ||
-        r.org_unit_name.toLowerCase().includes(q)
+        (r.org_unit_name ?? r.org_unit_id).toLowerCase().includes(q)
       )
     : roster;
 
@@ -142,7 +142,7 @@ export function RosterView() {
         const av = a.calling_id === null ? 0 : 1;
         const bv = b.calling_id === null ? 0 : 1;
         if (av !== bv) return av - bv;
-        return a.org_unit_name.localeCompare(b.org_unit_name) || a.sort_order - b.sort_order;
+        return (a.org_unit_name ?? a.org_unit_id).localeCompare(b.org_unit_name ?? b.org_unit_id) || a.sort_order - b.sort_order;
       }
       return a.position_name.localeCompare(b.position_name);
     });
@@ -176,7 +176,7 @@ export function RosterView() {
   }
 
   const orgIds = Object.keys(grouped).sort((a, b) =>
-    grouped[a][0].org_unit_name.localeCompare(grouped[b][0].org_unit_name)
+    (grouped[a][0].org_unit_name ?? a).localeCompare(grouped[b][0].org_unit_name ?? b)
   );
 
   return (

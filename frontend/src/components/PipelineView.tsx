@@ -173,7 +173,7 @@ function AddCallingForm({ roster, onClose }: { roster: RosterEntry[]; onClose: (
   // Unique orgs in sorted order
   const orgs = [...new Map(
     roster.map(r => [r.org_unit_id, r.org_unit_name])
-  ).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  ).entries()].sort((a, b) => (a[1] ?? '').localeCompare(b[1] ?? ''));
 
   // Positions for selected org, vacant first
   const positions = selectedOrgId
