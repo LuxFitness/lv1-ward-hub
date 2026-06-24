@@ -1,59 +1,130 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { MeetingAgenda, AgendaItem, ActionItem, MeetingType } from '@/lib/mockData';
+import type { MeetingAgenda, AgendaItem, ActionItem, MeetingType, ActionItemStatus } from '@/lib/mockData';
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function parseLocalDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
+  return parseLocalDate(iso).toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 }
 
 function shortDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseLocalDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function daysUntil(iso: string) {
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.ceil((parseLocalDate(iso).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function formatDue(iso: string | null | undefined) {
   if (!iso) return null;
   const d = daysUntil(iso);
-  if (d < 0) return { label: `${Math.abs(d)}d overdue`, color: 'text-destructive' };
-  if (d === 0) return { label: 'Due today', color: 'text-amber-600' };
-  if (d <= 3)  return { label: `${d}d left`, color: 'text-amber-600' };
-  return { label: shortDate(iso), color: 'text-muted-foreground' };
+  if (d < 0)  return { label: `${Math.abs(d)}d overdue`, cls: 'text-destructive font-semibold' };
+  if (d === 0) return { label: 'Due today', cls: 'text-amber-600 font-semibold' };
+  if (d <= 3)  return { label: `${d}d left`, cls: 'text-amber-600' };
+  return { label: shortDate(iso), cls: 'text-muted-foreground' };
 }
 
-// ── Inline add row ──────────────────────────────────────────────────────────
+// Derives the effective status: if no ai_status, infer from completed flag
+function effectiveStatus(item: ActionItem): ActionItemStatus {
+  if (item.ai_status) return item.ai_status;
+  return item.completed ? 'closed' : 'open';
+}
 
-function AddRow({
-  placeholder,
-  onAdd,
-  fields,
-}: {
-  placeholder: string;
-  onAdd: (values: { title: string; owner?: string; due_date?: string }) => void;
-  fields?: Array<'owner' | 'due_date'>;
-}) {
-  const [open, setOpen]     = useState(false);
-  const [title, setTitle]   = useState('');
-  const [owner, setOwner]   = useState('');
-  const [due,   setDue]     = useState('');
+function isOpen(item: ActionItem): boolean {
+  const s = effectiveStatus(item);
+  return s === 'open' || s === 'in_progress';
+}
+
+// ── Status config ─────────────────────────────────────────────────────────────
+
+const STATUS_CYCLE: Record<ActionItemStatus, ActionItemStatus> = {
+  open: 'in_progress',
+  in_progress: 'closed',
+  closed: 'deferred',
+  deferred: 'open',
+};
+
+const STATUS_LABEL: Record<ActionItemStatus, string> = {
+  open: 'Open',
+  in_progress: 'In Progress',
+  closed: 'Closed',
+  deferred: 'Deferred',
+};
+
+const STATUS_STYLE: Record<ActionItemStatus, string> = {
+  open:        'bg-amber-50 text-amber-700 border-amber-200',
+  in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+  closed:      'bg-emerald-50 text-emerald-700 border-emerald-200',
+  deferred:    'bg-slate-100 text-slate-500 border-slate-200',
+};
+
+const STATUS_DOT: Record<ActionItemStatus, string> = {
+  open:        'bg-amber-500',
+  in_progress: 'bg-blue-500',
+  closed:      'bg-emerald-500',
+  deferred:    'bg-slate-400',
+};
+
+// ── Standing sections per meeting type ───────────────────────────────────────
+
+const STANDING: Record<MeetingType, string[]> = {
+  bishopric: [
+    'Opening Devotional',
+    'Review of Carry-Forward Action Items',
+    'Callings & Releases',
+    'Upcoming Ordinances',
+    'Sacrament Meeting Planning',
+    'Youth',
+    'Ministering & Welfare',
+    'New Business',
+    'Closing Prayer',
+  ],
+  ward_council: [
+    'Opening Prayer',
+    'Review of Carry-Forward Action Items',
+    'Elders Quorum Report',
+    'Relief Society Report',
+    'Young Men Report',
+    'Young Women Report',
+    'Primary Report',
+    'Sunday School Report',
+    'Ministering & Welfare',
+    'New Business',
+    'Closing Prayer',
+  ],
+  pec: [
+    'Opening Prayer',
+    'Review of Carry-Forward Action Items',
+    'Ministering Report',
+    'Welfare & Self-Reliance',
+    'New Business',
+    'Closing Prayer',
+  ],
+};
+
+// ── Inline add form ───────────────────────────────────────────────────────────
+
+function AddActionRow({ onAdd }: { onAdd: (v: { title: string; owner?: string; due_date?: string }) => void }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [owner, setOwner] = useState('');
+  const [due,   setDue]   = useState('');
 
   function commit() {
     if (!title.trim()) return;
-    onAdd({
-      title: title.trim(),
-      ...(fields?.includes('owner') && owner ? { owner: owner.trim() } : {}),
-      ...(fields?.includes('due_date') && due ? { due_date: due } : {}),
-    });
-    setTitle(''); setOwner(''); setDue('');
-    setOpen(false);
+    onAdd({ title: title.trim(), ...(owner ? { owner } : {}), ...(due ? { due_date: due } : {}) });
+    setTitle(''); setOwner(''); setDue(''); setOpen(false);
   }
 
   if (!open) {
@@ -62,162 +133,212 @@ function AddRow({
         onClick={() => setOpen(true)}
         className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors py-2 w-full"
       >
-        <span className="text-base leading-none">+</span> {placeholder}
+        <span className="text-sm font-bold leading-none">+</span> Add action item
       </button>
     );
   }
 
   return (
-    <div className="bg-muted/30 border border-border rounded-lg p-3 space-y-2">
+    <div className="bg-muted/30 border border-border rounded-lg p-3 space-y-2 mt-1">
       <input
         autoFocus
         value={title}
-        placeholder={placeholder}
+        placeholder="Action item description"
         onChange={e => setTitle(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setOpen(false); }}
-        className="w-full text-sm bg-white border border-border rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-primary"
+        className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-primary"
       />
-      {(fields ?? []).length > 0 && (
-        <div className="flex gap-2">
-          {fields?.includes('owner') && (
-            <input
-              value={owner}
-              placeholder="Owner"
-              onChange={e => setOwner(e.target.value)}
-              className="flex-1 text-xs bg-white border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
-            />
-          )}
-          {fields?.includes('due_date') && (
-            <input
-              type="date"
-              value={due}
-              onChange={e => setDue(e.target.value)}
-              className="text-xs bg-white border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
-            />
-          )}
-        </div>
-      )}
       <div className="flex gap-2">
-        <button
-          onClick={commit}
-          className="text-xs font-semibold px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-        >Add</button>
-        <button
-          onClick={() => { setOpen(false); setTitle(''); setOwner(''); setDue(''); }}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2"
-        >Cancel</button>
+        <input
+          value={owner}
+          placeholder="Owner"
+          onChange={e => setOwner(e.target.value)}
+          className="flex-1 text-xs bg-background border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+        />
+        <input
+          type="date"
+          value={due}
+          onChange={e => setDue(e.target.value)}
+          className="text-xs bg-background border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button onClick={commit} className="text-xs font-semibold px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">
+          Add
+        </button>
+        <button onClick={() => { setOpen(false); setTitle(''); setOwner(''); setDue(''); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2">
+          Cancel
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Agenda item row ─────────────────────────────────────────────────────────
+// ── Action item row (OAC style) ────────────────────────────────────────────────
 
-const STATUS_DOT: Record<string, string> = {
-  pending:   'bg-muted-foreground/30',
-  discussed: 'bg-primary',
-  tabled:    'bg-amber-400',
-  resolved:  'bg-emerald-500',
-};
-
-const STATUS_CYCLE: Record<string, string> = {
-  pending: 'discussed', discussed: 'tabled', tabled: 'resolved', resolved: 'pending',
-};
-
-function AgendaItemRow({
+function ActionRow({
   item,
-  onStatusChange,
+  number,
+  onStatusCycle,
   onDelete,
-}: {
-  item: AgendaItem;
-  onStatusChange: (status: string) => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="flex items-start gap-3 py-2.5 group border-b border-border/60 last:border-0">
-      <button
-        onClick={() => onStatusChange(STATUS_CYCLE[item.status] ?? 'pending')}
-        title={`Status: ${item.status} — click to advance`}
-        className={cn('mt-0.5 w-3 h-3 rounded-full shrink-0 transition-colors ring-1 ring-border', STATUS_DOT[item.status])}
-      />
-      <div className="flex-1 min-w-0">
-        <p className={cn('text-sm font-medium text-foreground', item.status === 'resolved' && 'line-through text-muted-foreground')}>
-          {item.title}
-        </p>
-        {item.details && (
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.details}</p>
-        )}
-        {item.owner && (
-          <p className="text-[10px] text-muted-foreground mt-0.5">{item.owner}</p>
-        )}
-      </div>
-      <button
-        onClick={onDelete}
-        className="opacity-0 group-hover:opacity-40 hover:opacity-100 text-destructive text-xs shrink-0 transition-opacity"
-        title="Remove"
-      >✕</button>
-    </div>
-  );
-}
-
-// ── Action item row ─────────────────────────────────────────────────────────
-
-function ActionItemRow({
-  item,
-  onToggle,
-  onDelete,
+  dim,
 }: {
   item: ActionItem;
-  onToggle: () => void;
+  number: string;
+  onStatusCycle: () => void;
   onDelete: () => void;
+  dim?: boolean;
 }) {
-  const due = formatDue(item.due_date);
+  const status = effectiveStatus(item);
+  const due    = formatDue(item.due_date);
 
   return (
-    <div className={cn('flex items-center gap-3 py-2.5 group border-b border-border/60 last:border-0', item.completed && 'opacity-50')}>
+    <div className={cn(
+      'flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0 group',
+      dim && 'opacity-50',
+    )}>
+      {/* Status dot — click to cycle */}
       <button
-        onClick={onToggle}
-        className={cn(
-          'w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors',
-          item.completed ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-border hover:border-primary',
-        )}
-      >
-        {item.completed && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
-      </button>
+        onClick={onStatusCycle}
+        title={`Status: ${STATUS_LABEL[status]} — click to advance`}
+        className={cn('mt-1 w-2.5 h-2.5 rounded-full shrink-0 transition-colors', STATUS_DOT[status])}
+      />
+
+      {/* Number */}
+      <span className="text-[10px] font-mono text-muted-foreground shrink-0 mt-0.5 w-10">{number}</span>
+
+      {/* Title + meta */}
       <div className="flex-1 min-w-0">
-        <p className={cn('text-sm text-foreground', item.completed && 'line-through')}>
+        <p className={cn('text-sm text-foreground leading-snug', status === 'closed' && 'line-through text-muted-foreground')}>
           {item.title}
         </p>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           {item.owner && (
             <span className="text-[10px] text-muted-foreground">{item.owner}</span>
           )}
-          {due && !item.completed && (
-            <span className={cn('text-[10px] font-medium', due.color)}>{due.label}</span>
+          {due && status !== 'closed' && (
+            <span className={cn('text-[10px]', due.cls)}>{due.label}</span>
           )}
         </div>
       </div>
+
+      {/* Status badge */}
+      <span className={cn(
+        'text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 cursor-pointer select-none',
+        STATUS_STYLE[status],
+      )} onClick={onStatusCycle}>
+        {STATUS_LABEL[status]}
+      </span>
+
+      {/* Delete */}
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-40 hover:opacity-100 text-destructive text-xs shrink-0 transition-opacity"
-        title="Remove"
+        className="opacity-0 group-hover:opacity-40 hover:opacity-100 text-destructive text-xs shrink-0 mt-0.5 transition-opacity"
       >✕</button>
     </div>
   );
 }
 
-// ── Meeting card ────────────────────────────────────────────────────────────
+// ── Standing agenda item ──────────────────────────────────────────────────────
 
-function MeetingCard({ meeting, isUpcoming }: { meeting: MeetingAgenda; isUpcoming: boolean }) {
-  const qc = useQueryClient();
-  const meetingType = meeting.meeting_type;
+function StandingRow({ title, item, onToggle }: {
+  title: string;
+  item?: AgendaItem;
+  onToggle: (status: AgendaItem['status']) => void;
+}) {
+  const discussed = item?.status === 'discussed' || item?.status === 'resolved';
+  return (
+    <div className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0 group">
+      <button
+        onClick={() => onToggle(discussed ? 'pending' : 'discussed')}
+        className={cn(
+          'w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors',
+          discussed ? 'bg-primary border-primary' : 'bg-background border-border hover:border-primary/60',
+        )}
+      >
+        {discussed && <span className="text-primary-foreground text-[9px] font-bold leading-none">✓</span>}
+      </button>
+      <span className={cn('text-sm flex-1', discussed ? 'text-muted-foreground line-through' : 'text-foreground')}>
+        {title}
+      </span>
+    </div>
+  );
+}
 
-  function invalidate() {
-    qc.invalidateQueries({ queryKey: ['agenda', meetingType] });
+// ── Notes textarea ────────────────────────────────────────────────────────────
+
+function NotesField({ value, onSave }: { value: string | null | undefined; onSave: (v: string) => void }) {
+  const [draft, setDraft]   = useState(value ?? '');
+  const [dirty, setDirty]   = useState(false);
+  const timerRef            = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => { setDraft(value ?? ''); }, [value]);
+
+  function onChange(v: string) {
+    setDraft(v);
+    setDirty(true);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { onSave(v); setDirty(false); }, 1500);
   }
 
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Notes</p>
+        {dirty && <span className="text-[10px] text-muted-foreground">Saving…</span>}
+      </div>
+      <textarea
+        value={draft}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Meeting notes, decisions, context…"
+        rows={3}
+        className="w-full text-sm bg-muted/30 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary resize-none leading-relaxed text-foreground placeholder:text-muted-foreground"
+      />
+    </div>
+  );
+}
+
+// ── Current meeting OAC panel ─────────────────────────────────────────────────
+
+function OACPanel({
+  meeting,
+  meetingType,
+  allMeetings,
+}: {
+  meeting: MeetingAgenda;
+  meetingType: MeetingType;
+  allMeetings: MeetingAgenda[];
+}) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['agenda', meetingType] });
+
+  // All action items across all meetings, sorted chronologically for sequential numbering
+  const allItems: (ActionItem & { meetingDate: string; meetingId: string })[] = allMeetings
+    .slice()
+    .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date))
+    .flatMap(m => m.action_items.map(ai => ({ ...ai, meetingDate: m.meeting_date, meetingId: m.id })));
+
+  // Build sequential number map: item.id → "AI-001"
+  const aiNumberMap = new Map<string, string>();
+  allItems.forEach((item, idx) => {
+    aiNumberMap.set(item.id, `AI-${String(idx + 1).padStart(3, '0')}`);
+  });
+
+  // Carry-forward: open items from PAST meetings (not the current one)
+  const carryForward = allItems.filter(
+    ai => ai.meetingId !== meeting.id && isOpen(ai)
+  );
+
+  // This meeting's action items
+  const thisItems = meeting.action_items;
+
+  // Standing agenda items for this meeting (matched by sort_order)
+  const standingTitles = STANDING[meetingType];
+  const agendaByOrder = [...meeting.agenda_items].sort((a, b) => a.sort_order - b.sort_order);
+
+  // Mutations
   const addItem = useMutation({
-    mutationFn: (body: { title: string; owner?: string }) =>
+    mutationFn: (body: { title: string; sort_order: number }) =>
       apiFetch(`/api/agenda/${meeting.id}/items`, { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: invalidate,
   });
@@ -229,22 +350,15 @@ function MeetingCard({ meeting, isUpcoming }: { meeting: MeetingAgenda; isUpcomi
       await qc.cancelQueries({ queryKey: ['agenda', meetingType] });
       const prev = qc.getQueryData<MeetingAgenda[]>(['agenda', meetingType]);
       qc.setQueryData<MeetingAgenda[]>(['agenda', meetingType], old =>
-        (old ?? []).map(m =>
-          m.id === meeting.id
-            ? { ...m, agenda_items: m.agenda_items.map(i => i.id === itemId ? { ...i, ...updates } : i) }
-            : m
+        (old ?? []).map(m => m.id === meeting.id
+          ? { ...m, agenda_items: m.agenda_items.map(i => i.id === itemId ? { ...i, ...updates } : i) }
+          : m
         )
       );
       return { prev };
     },
     onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['agenda', meetingType], ctx.prev); },
     onSettled: invalidate,
-  });
-
-  const deleteItem = useMutation({
-    mutationFn: (itemId: string) =>
-      apiFetch(`/api/agenda/items/${itemId}`, { method: 'DELETE' }),
-    onSuccess: invalidate,
   });
 
   const addAction = useMutation({
@@ -260,11 +374,10 @@ function MeetingCard({ meeting, isUpcoming }: { meeting: MeetingAgenda; isUpcomi
       await qc.cancelQueries({ queryKey: ['agenda', meetingType] });
       const prev = qc.getQueryData<MeetingAgenda[]>(['agenda', meetingType]);
       qc.setQueryData<MeetingAgenda[]>(['agenda', meetingType], old =>
-        (old ?? []).map(m =>
-          m.id === meeting.id
-            ? { ...m, action_items: m.action_items.map(a => a.id === actionId ? { ...a, ...updates } : a) }
-            : m
-        )
+        (old ?? []).map(m => ({
+          ...m,
+          action_items: m.action_items.map(a => a.id === actionId ? { ...a, ...updates } : a),
+        }))
       );
       return { prev };
     },
@@ -278,173 +391,240 @@ function MeetingCard({ meeting, isUpcoming }: { meeting: MeetingAgenda; isUpcomi
     onSuccess: invalidate,
   });
 
-  const days               = daysUntil(meeting.meeting_date);
-  const pendingActions     = meeting.action_items.filter(a => !a.completed).length;
-  const openDiscussions    = meeting.agenda_items.filter(i => i.status === 'pending').length;
+  const patchNotes = useMutation({
+    mutationFn: (notes: string) =>
+      apiFetch(`/api/agenda/${meeting.id}`, { method: 'PATCH', body: JSON.stringify({ notes }) }),
+    onSuccess: invalidate,
+  });
+
+  function cycleStatus(item: ActionItem) {
+    const current = effectiveStatus(item);
+    const next = STATUS_CYCLE[current];
+    patchAction.mutate({
+      actionId: item.id,
+      updates: {
+        ai_status: next,
+        completed: next === 'closed',
+        completed_at: next === 'closed' ? new Date().toISOString() : null,
+      },
+    });
+  }
+
+  function handleStandingToggle(idx: number, newStatus: AgendaItem['status']) {
+    const existing = agendaByOrder[idx];
+    if (existing) {
+      patchItem.mutate({ itemId: existing.id, updates: { status: newStatus } });
+    } else {
+      // Create the agenda item on-the-fly
+      addItem.mutate({ title: standingTitles[idx], sort_order: idx });
+    }
+  }
+
+  const days = daysUntil(meeting.meeting_date);
+  const openCount = carryForward.length + thisItems.filter(isOpen).length;
 
   return (
-    <div className={cn(
-      'bg-card border rounded-xl overflow-hidden shadow-sm',
-      isUpcoming ? 'border-primary/40' : 'border-border',
-    )}>
-      {/* Header */}
-      <div className={cn(
-        'px-5 py-4 flex items-center justify-between',
-        isUpcoming ? 'bg-primary text-primary-foreground' : 'bg-muted/40',
-      )}>
+    <div className="space-y-6">
+      {/* Meeting header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="font-semibold text-sm">{formatDate(meeting.meeting_date)}</p>
-          <p className={cn('text-xs mt-0.5', isUpcoming ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-            {days < 0 ? `${Math.abs(days)} days ago` : days === 0 ? 'Today' : `${days} days away`}
+          <p className="text-lg font-bold text-foreground leading-tight">{formatDate(meeting.meeting_date)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {days < 0 ? `${Math.abs(days)} days ago` : days === 0 ? 'Today' : `In ${days} day${days !== 1 ? 's' : ''}`}
+            {openCount > 0 && (
+              <span className="ml-2 font-semibold text-amber-600">· {openCount} open action{openCount !== 1 ? 's' : ''}</span>
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {openDiscussions > 0 && !isUpcoming && (
-            <span className="text-[10px] px-2 py-0.5 bg-white/20 rounded-full">{openDiscussions} pending items</span>
-          )}
-          {pendingActions > 0 && (
-            <span className={cn(
-              'text-[10px] font-semibold px-2.5 py-1 rounded-full border',
-              isUpcoming
-                ? 'bg-white/20 text-current border-white/20'
-                : 'bg-amber-50 text-amber-700 border-amber-200',
-            )}>
-              {pendingActions} open action{pendingActions > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
       </div>
 
-      <div className="px-5 divide-y divide-border">
-        {/* Agenda items */}
-        <div className="py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Agenda</p>
-          {meeting.agenda_items
-            .slice()
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map(item => (
-              <AgendaItemRow
-                key={item.id}
-                item={item}
-                onStatusChange={status => patchItem.mutate({ itemId: item.id, updates: { status: status as AgendaItem['status'] } })}
-                onDelete={() => deleteItem.mutate(item.id)}
-              />
-            ))
-          }
-          <AddRow
-            placeholder="Add agenda item"
-            onAdd={({ title, owner }) => addItem.mutate({ title, owner })}
-            fields={['owner']}
-          />
-        </div>
-
-        {/* Action items */}
-        <div className="py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Action Items</p>
-          {meeting.action_items.map(action => (
-            <ActionItemRow
-              key={action.id}
-              item={action}
-              onToggle={() => patchAction.mutate({
-                actionId: action.id,
-                updates: { completed: !action.completed },
-              })}
-              onDelete={() => deleteAction.mutate(action.id)}
+      {/* ── Standing Agenda ── */}
+      <section>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          Standing Agenda
+        </p>
+        <div className="bg-card border border-border rounded-lg px-4 divide-y divide-border/40">
+          {standingTitles.map((title, idx) => (
+            <StandingRow
+              key={title}
+              title={title}
+              item={agendaByOrder[idx]}
+              onToggle={status => handleStandingToggle(idx, status)}
             />
           ))}
-          <AddRow
-            placeholder="Add action item"
-            onAdd={({ title, owner, due_date }) => addAction.mutate({ title, owner, due_date })}
-            fields={['owner', 'due_date']}
-          />
         </div>
+      </section>
 
-        {/* Notes */}
-        {meeting.notes && (
-          <div className="py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Notes</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">{meeting.notes}</p>
+      {/* ── Action Log ── */}
+      <section>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          Action Log
+        </p>
+
+        {/* Carry-forward block */}
+        {carryForward.length > 0 && (
+          <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 py-2">
+              Carry-Forward — {carryForward.length} open from previous meetings
+            </p>
+            {carryForward.map(item => (
+              <ActionRow
+                key={item.id}
+                item={item}
+                number={aiNumberMap.get(item.id) ?? ''}
+                onStatusCycle={() => cycleStatus(item)}
+                onDelete={() => deleteAction.mutate(item.id)}
+              />
+            ))}
           </div>
         )}
-      </div>
+
+        {/* This meeting's items */}
+        <div className="bg-card border border-border rounded-lg px-4 py-1">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground py-2">
+            This Meeting
+          </p>
+          {thisItems.length === 0 && (
+            <p className="text-xs text-muted-foreground pb-2 italic">No action items yet</p>
+          )}
+          {thisItems.map(item => (
+            <ActionRow
+              key={item.id}
+              item={item}
+              number={aiNumberMap.get(item.id) ?? ''}
+              onStatusCycle={() => cycleStatus(item)}
+              onDelete={() => deleteAction.mutate(item.id)}
+              dim={effectiveStatus(item) === 'closed'}
+            />
+          ))}
+          <AddActionRow onAdd={v => addAction.mutate(v)} />
+        </div>
+      </section>
+
+      {/* ── Notes ── */}
+      <section>
+        <NotesField value={meeting.notes} onSave={v => patchNotes.mutate(v)} />
+      </section>
     </div>
   );
 }
 
-// ── Open actions across all meetings ────────────────────────────────────────
+// ── Past meeting row (collapsed) ──────────────────────────────────────────────
 
-function OpenActionsPanel({ meetings }: { meetings: MeetingAgenda[] }) {
-  const all = meetings.flatMap(m =>
-    m.action_items
-      .filter(a => !a.completed)
-      .map(a => ({ ...a, meetingDate: m.meeting_date }))
-  );
+function PastMeetingRow({
+  meeting,
+  allMeetings,
+  meetingType,
+  aiNumberMap,
+}: {
+  meeting: MeetingAgenda;
+  allMeetings: MeetingAgenda[];
+  meetingType: MeetingType;
+  aiNumberMap: Map<string, string>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const openItems = meeting.action_items.filter(isOpen);
+  const closedItems = meeting.action_items.filter(a => !isOpen(a));
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['agenda', meetingType] });
 
-  if (all.length === 0) return null;
+  const patchAction = useMutation({
+    mutationFn: ({ actionId, updates }: { actionId: string; updates: Partial<ActionItem> }) =>
+      apiFetch(`/api/agenda/actions/${actionId}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+    onMutate: async ({ actionId, updates }) => {
+      const prev = qc.getQueryData<MeetingAgenda[]>(['agenda', meetingType]);
+      qc.setQueryData<MeetingAgenda[]>(['agenda', meetingType], old =>
+        (old ?? []).map(m => ({
+          ...m,
+          action_items: m.action_items.map(a => a.id === actionId ? { ...a, ...updates } : a),
+        }))
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['agenda', meetingType], ctx.prev); },
+    onSettled: invalidate,
+  });
+
+  const deleteAction = useMutation({
+    mutationFn: (actionId: string) => apiFetch(`/api/agenda/actions/${actionId}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+
+  function cycleStatus(item: ActionItem) {
+    const next = STATUS_CYCLE[effectiveStatus(item)];
+    patchAction.mutate({ actionId: item.id, updates: { ai_status: next, completed: next === 'closed', completed_at: next === 'closed' ? new Date().toISOString() : null } });
+  }
 
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 mb-3">
-        Open Actions ({all.length})
-      </p>
-      <div className="space-y-2">
-        {all.map(a => {
-          const due = formatDue(a.due_date);
-          return (
-            <div key={a.id} className="flex items-center gap-2 text-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-              <span className="text-foreground flex-1 min-w-0 truncate">{a.title}</span>
-              {a.owner && <span className="text-xs text-muted-foreground shrink-0">{a.owner}</span>}
-              {due && <span className={cn('text-xs font-medium shrink-0', due.color)}>{due.label}</span>}
+    <div className="border border-border rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/40 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className={cn('transition-transform text-muted-foreground text-xs', expanded && 'rotate-90')}>▶</span>
+          <span className="text-sm font-medium text-foreground">{shortDate(meeting.meeting_date)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {openItems.length > 0 && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+              {openItems.length} open
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground">
+            {meeting.action_items.length} action{meeting.action_items.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-3 border-t border-border bg-muted/20">
+          {meeting.notes && (
+            <p className="text-xs text-muted-foreground italic pt-3 pb-1 leading-relaxed">{meeting.notes}</p>
+          )}
+          {meeting.action_items.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-3">No action items recorded</p>
+          ) : (
+            <div className="pt-2">
+              {[...openItems, ...closedItems].map(item => (
+                <ActionRow
+                  key={item.id}
+                  item={item}
+                  number={aiNumberMap.get(item.id) ?? ''}
+                  onStatusCycle={() => cycleStatus(item)}
+                  onDelete={() => deleteAction.mutate(item.id)}
+                  dim={!isOpen(item)}
+                />
+              ))}
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── MeetingsView ────────────────────────────────────────────────────────────
+// ── MeetingsView ──────────────────────────────────────────────────────────────
 
 const TAB_LABELS: Record<MeetingType, string> = {
-  bishopric:   'Bishopric',
+  bishopric:    'Bishopric',
   ward_council: 'Ward Council',
-  pec:         'PEC',
+  pec:          'PEC',
 };
 
-const DEFAULT_ITEMS: Record<MeetingType, string[]> = {
-  bishopric: [
-    'Opening Devotional',
-    'Review Action Items',
-    'Callings to Discuss',
-    'Upcoming Ordinances',
-    'Sacrament Meeting Coordination',
-    'Youth',
-    'Ministry / Welfare',
-    'New Business',
-    'Closing Prayer',
-  ],
-  ward_council: [
-    'Opening Prayer',
-    'Review Action Items',
-    'Elders Quorum Report',
-    'Relief Society Report',
-    'Young Men Report',
-    'Young Women Report',
-    'Primary Report',
-    'Sunday School Report',
-    'Ministry / Welfare',
-    'New Business',
-    'Closing Prayer',
-  ],
-  pec: [
-    'Opening Prayer',
-    'Review Action Items',
-    'Ministering Report',
-    'New Business',
-    'Closing Prayer',
-  ],
+const DEFAULT_WEEKDAY: Record<MeetingType, number> = {
+  bishopric: 1,    // Monday
+  ward_council: 0, // Sunday
+  pec: 0,          // Sunday
 };
+
+function nextWeekday(weekday: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const diff = (weekday - d.getDay() + 7) % 7 || 7;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
 
 export function MeetingsView() {
   const [activeType, setActiveType] = useState<MeetingType>('bishopric');
@@ -462,26 +642,35 @@ export function MeetingsView() {
         body: JSON.stringify({ meeting_type: activeType, meeting_date }),
       }),
     onSuccess: async (newMeeting: MeetingAgenda) => {
-      // Pre-seed with default agenda items
-      const defaults = DEFAULT_ITEMS[activeType] ?? [];
-      for (let i = 0; i < defaults.length; i++) {
+      // Pre-seed standing items
+      const titles = STANDING[activeType];
+      for (let i = 0; i < titles.length; i++) {
         await apiFetch(`/api/agenda/${newMeeting.id}/items`, {
           method: 'POST',
-          body: JSON.stringify({ title: defaults[i], sort_order: i }),
+          body: JSON.stringify({ title: titles[i], sort_order: i }),
         });
       }
       qc.invalidateQueries({ queryKey: ['agenda', activeType] });
     },
   });
 
-  const meetings     = (data ?? []).sort((a, b) => b.meeting_date.localeCompare(a.meeting_date));
-  const today        = new Date().toISOString().slice(0, 10);
-  const upcoming     = meetings.filter(m => m.meeting_date >= today);
-  const past         = meetings.filter(m => m.meeting_date < today);
+  const today = new Date().toISOString().slice(0, 10);
+  const meetings = (data ?? []).sort((a, b) => b.meeting_date.localeCompare(a.meeting_date));
+
+  // Current = the upcoming/soonest future meeting (or today)
+  const current  = meetings.find(m => m.meeting_date >= today) ?? meetings[0] ?? null;
+  const past     = meetings.filter(m => m !== current && m.meeting_date < today);
+
+  // Build global AI number map across ALL meetings (chronological)
+  const allItems: (ActionItem & { meetingDate: string })[] = [...meetings]
+    .sort((a, b) => a.meeting_date.localeCompare(b.meeting_date))
+    .flatMap(m => m.action_items.map(ai => ({ ...ai, meetingDate: m.meeting_date })));
+  const aiNumberMap = new Map<string, string>();
+  allItems.forEach((item, idx) => aiNumberMap.set(item.id, `AI-${String(idx + 1).padStart(3, '0')}`));
 
   return (
     <div className="pb-10">
-      {/* Sub-tab bar */}
+      {/* Meeting type tabs */}
       <div className="flex border-b border-border bg-card">
         {(Object.keys(TAB_LABELS) as MeetingType[]).map(t => (
           <button
@@ -489,9 +678,7 @@ export function MeetingsView() {
             onClick={() => setActiveType(t)}
             className={cn(
               'px-5 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap',
-              activeType === t
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
+              activeType === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             {TAB_LABELS[t]}
@@ -501,42 +688,56 @@ export function MeetingsView() {
 
       {isLoading ? (
         <div className="p-5 space-y-4">
-          {[0,1].map(i => <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />)}
+          {[0, 1].map(i => <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />)}
         </div>
       ) : (
-        <div className="p-5 space-y-5">
-          {/* Open actions banner */}
-          <OpenActionsPanel meetings={meetings} />
+        <div className="p-5 space-y-6">
 
-          {/* Upcoming meetings */}
-          {upcoming.length === 0 ? (
+          {/* ── Current meeting ── */}
+          {current ? (
+            <OACPanel meeting={current} meetingType={activeType} allMeetings={meetings} />
+          ) : (
             <div className="bg-card border border-dashed border-border rounded-xl p-8 text-center">
-              <p className="text-sm text-muted-foreground mb-3">No upcoming {TAB_LABELS[activeType]} meeting scheduled</p>
+              <p className="text-sm text-muted-foreground mb-3">No {TAB_LABELS[activeType]} meeting scheduled</p>
               <button
-                onClick={() => {
-                  // Default to next Monday (or appropriate weekday)
-                  const next = new Date();
-                  next.setDate(next.getDate() + (7 - next.getDay() + 1) % 7 || 7);
-                  createMeeting.mutate(next.toISOString().slice(0, 10));
-                }}
+                onClick={() => createMeeting.mutate(nextWeekday(DEFAULT_WEEKDAY[activeType]))}
                 disabled={createMeeting.isPending}
                 className="text-xs font-semibold px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                {createMeeting.isPending ? 'Creating…' : '+ Schedule Next Meeting'}
+              </button>
+            </div>
+          )}
+
+          {/* Schedule next meeting button (when current exists) */}
+          {current && (
+            <div className="flex justify-end">
+              <button
+                onClick={() => createMeeting.mutate(nextWeekday(DEFAULT_WEEKDAY[activeType]))}
+                disabled={createMeeting.isPending}
+                className="text-xs text-muted-foreground hover:text-primary transition-colors px-3 py-1.5 rounded-lg border border-border hover:border-primary/30"
               >
                 + Schedule Next Meeting
               </button>
             </div>
-          ) : (
-            upcoming.map(m => (
-              <MeetingCard key={m.id} meeting={m} isUpcoming={true} />
-            ))
           )}
 
-          {/* Past meetings */}
+          {/* ── Past meetings log ── */}
           {past.length > 0 && (
-            <>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-2">Past Meetings</p>
-              {past.map(m => <MeetingCard key={m.id} meeting={m} isUpcoming={false} />)}
-            </>
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Past Meetings
+              </p>
+              {past.map(m => (
+                <PastMeetingRow
+                  key={m.id}
+                  meeting={m}
+                  allMeetings={meetings}
+                  meetingType={activeType}
+                  aiNumberMap={aiNumberMap}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

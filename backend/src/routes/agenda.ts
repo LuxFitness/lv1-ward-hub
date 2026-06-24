@@ -159,7 +159,7 @@ agendaRouter.patch('/actions/:actionId', async (req, res) => {
     updates.completed_at = null;
   }
 
-  const ALLOWED = new Set(['title', 'owner', 'due_date', 'completed', 'completed_at']);
+  const ALLOWED = new Set(['title', 'owner', 'due_date', 'completed', 'completed_at', 'ai_status']);
   const safe = Object.fromEntries(
     Object.entries(updates).filter(([k]) => ALLOWED.has(k))
   );

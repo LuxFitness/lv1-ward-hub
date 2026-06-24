@@ -289,6 +289,8 @@ export interface AgendaItem {
   sort_order: number;
 }
 
+export type ActionItemStatus = 'open' | 'in_progress' | 'closed' | 'deferred';
+
 export interface ActionItem {
   id: string;
   title: string;
@@ -296,6 +298,7 @@ export interface ActionItem {
   due_date?: string | null;
   completed: boolean;
   completed_at?: string | null;
+  ai_status?: ActionItemStatus;
 }
 
 export interface MeetingAgenda {
